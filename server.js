@@ -40,6 +40,18 @@ app.get('/api/history', async (req, res) => {
     }
 });
 
+// 🌟 NEW: The Admin command to wipe the database
+app.delete('/api/history', async (req, res) => {
+    try {
+        await Location.deleteMany({}); // This deletes everything in the collection!
+        console.log("🗑️ Database history wiped by admin.");
+        res.status(200).send({ message: "History cleared successfully!" });
+    } catch (err) {
+        console.error("Failed to clear history:", err);
+        res.status(500).send({ error: "Failed to clear history" });
+    }
+});
+
 io.on('connection', (socket) => {
     console.log(`📱 New device connected: ${socket.id}`);
 

@@ -1,5 +1,14 @@
 const express = require('express');
 require('dotenv').config();
+const rateLimit = require('express-rate-limit');
+
+// 🌟 NEW: The Security Bouncer
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: { error: "🚨 Too many requests from this IP, please try again after 15 minutes." }
+});
+
 const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
@@ -28,10 +37,10 @@ const io = new Server(server, {
 
 app.use(express.static('public'));
 
-// =========================================================
+
 // 🌟 NEW: Send the location history to the web dashboard
-// =========================================================
-app.get('/api/history', async (req, res) => {
+
+app.get('/api/history', apiLimiter, async (req, res) => {
     try {
         // Fetch past locations, sorted from oldest to newest
         const history = await Location.find().sort({ timestamp: 1 });
@@ -42,10 +51,20 @@ app.get('/api/history', async (req, res) => {
 });
 
 // 🌟 NEW: The Admin command to wipe the database
-app.delete('/api/history', async (req, res) => {
+// 🌟 NEW: Secure Admin command to wipe the database
+app.delete('/api/history', apiLimiter, async (req, res) => {
+    // 1. Grab the password sent from the web dashboard
+    const providedKey = req.headers['x-admin-key'];
+
+    // 2. Check if it matches the vault!
+    if (providedKey !== process.env.ADMIN_KEY) {
+        console.log("🚨 Unauthorized wipe attempt blocked!");
+        return res.status(401).send({ error: "Unauthorized: Invalid Admin Key" });
+    }
+
     try {
-        await Location.deleteMany({}); // This deletes everything in the collection!
-        console.log("🗑️ Database history wiped by admin.");
+        await Location.deleteMany({}); 
+        console.log("🗑️ Database history wiped by verified admin.");
         res.status(200).send({ message: "History cleared successfully!" });
     } catch (err) {
         console.error("Failed to clear history:", err);

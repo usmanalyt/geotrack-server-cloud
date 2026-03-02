@@ -1,5 +1,4 @@
 const express = require('express');
-const express = require('express');
 const cors = require('cors'); // 👈 ADD THIS LINE
 require('dotenv').config();
 const rateLimit = require('express-rate-limit');

@@ -7,6 +7,8 @@ const mongoose = require('mongoose');
 const app = express();
 const server = http.createServer(app);
 
+// Your working Atlas database connection
+const MONGO_URL = process.env.MONGO_URL;
 
 mongoose.connect(MONGO_URL)
     .then(() => console.log('✅ Successfully connected to MongoDB Atlas!'))

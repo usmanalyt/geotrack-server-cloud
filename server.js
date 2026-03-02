@@ -1,4 +1,6 @@
 const express = require('express');
+const express = require('express');
+const cors = require('cors'); // 👈 ADD THIS LINE
 require('dotenv').config();
 const rateLimit = require('express-rate-limit');
 
@@ -14,6 +16,14 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 
 const app = express();
+const app = express();
+app.use(express.json());
+
+// 🌟 NEW: The CORS Security Fix to allow the Admin Password
+app.use(cors({
+    origin: '*',
+    allowedHeaders: ['Content-Type', 'x-admin-key']
+}));
 const server = http.createServer(app);
 
 // Your working Atlas database connection

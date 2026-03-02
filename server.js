@@ -1,4 +1,5 @@
 const express = require('express');
+require('dotenv').config();
 const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
@@ -6,8 +7,6 @@ const mongoose = require('mongoose');
 const app = express();
 const server = http.createServer(app);
 
-// Your working Atlas database connection
-const MONGO_URL = 'mongodb+srv://usmanalyt:Usman%406871@cluster0.jemsq5q.mongodb.net/geotrack?appName=Cluster0';
 
 mongoose.connect(MONGO_URL)
     .then(() => console.log('✅ Successfully connected to MongoDB Atlas!'))

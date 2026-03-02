@@ -16,7 +16,6 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 
 const app = express();
-const app = express();
 app.use(express.json());
 
 // 🌟 NEW: The CORS Security Fix to allow the Admin Password

@@ -15,8 +15,8 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 
 const app = express();
+app.set('trust proxy', 1); // 👈 ADD THIS LINE so the rate limiter works on Render
 app.use(express.json());
-
 // 🌟 NEW: The CORS Security Fix to allow the Admin Password
 app.use(cors({
     origin: '*',

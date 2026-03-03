@@ -7,12 +7,12 @@ const KalmanFilter = require('kalman-filter').KalmanFilter;
 
 // Simple configuration for pedestrian-level movement in 2D (lat/lon)
 // 🌟 NEW: The Kalman GPS Filter (Digital Shock Absorber)
+// 🌟 NEW: The Kalman GPS Filter (Digital Shock Absorber)
 const KalmanFilter = require('kalman-filter').KalmanFilter;
 
-// We must explicitly declare 'dimension: 2' (Latitude and Longitude) to prevent crashes
 const kf = new KalmanFilter({
     observation: {
-        dimension: 2, // <--- This fixes the Render crash!
+        dimension: 2, 
         sensor: {
             matrix: [
                 [1, 0],
@@ -21,13 +21,12 @@ const kf = new KalmanFilter({
         }
     },
     dynamic: {
-        dimension: 2, // <--- Explicitly declaring the dynamic dimensions too
+        dimension: 2, 
         transition: [
             [1, 0],
             [0, 1]
         ]
     }
-
 });
 const rateLimit = require('express-rate-limit');
 

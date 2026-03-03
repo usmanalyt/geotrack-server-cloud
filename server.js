@@ -1,67 +1,98 @@
-const express = require('express');
-const cors = require('cors'); // 👈 ADD THIS LINE
+// ==========================================
+// 1. IMPORTS & SETUP
+// ==========================================
 require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const mongoose = require('mongoose');
+const cors = require('cors');
 const path = require('path');
-// 🌟 NEW: The Kalman GPS Filter (Digital Shock Absorber)
-const KalmanFilter = require('kalman-filter').KalmanFilter;
-
-// Simple configuration for pedestrian-level movement in 2D (lat/lon)
-// 🌟 NEW: The Kalman GPS Filter (Digital Shock Absorber)
-// 🌟 NEW: The Kalman GPS Filter (Digital Shock Absorber)
-const KalmanFilter = require('kalman-filter').KalmanFilter;
-
-const kf = new KalmanFilter({
-    observation: {
-        dimension: 2, 
-        sensor: {
-            matrix: [
-                [1, 0],
-                [0, 1]
-            ]
-        }
-    },
-    dynamic: {
-        dimension: 2, 
-        transition: [
-            [1, 0],
-            [0, 1]
-        ]
-    }
-});
 const rateLimit = require('express-rate-limit');
+const { KalmanFilter } = require('kalman-filter');
 
-// 🌟 NEW: The Security Bouncer
+// Initialize App & Server
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: { origin: "*", methods: ["GET", "POST"] }
+});
+
+// ==========================================
+// 2. MIDDLEWARE & SECURITY
+// ==========================================
+app.set('trust proxy', 1); // Allows rate limiter to work on Render
+app.use(express.json());
+
+// CORS Security Fix
+app.use(cors({
+    origin: '*',
+    allowedHeaders: ['Content-Type', 'x-admin-key']
+}));
+
+// Host the frontend website (public folder)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Security Bouncer for API endpoints
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    max: 100, // 100 requests per window
     message: { error: "🚨 Too many requests from this IP, please try again after 15 minutes." }
 });
 
 // ==========================================
-// 1. HOST THE FRONTEND WEBSITE
+// 3. DATABASE SETUP (MongoDB Atlas)
 // ==========================================
-// This tells the server to let anyone on the internet view the files in the 'public' folder
-app.use(express.static(path.join(__dirname, 'public')));
+const MONGO_URL = process.env.MONGO_URL;
 
-// ==========================================
-// 2. USER AUTHENTICATION DATABASE
-// ==========================================
+mongoose.connect(MONGO_URL)
+    .then(() => console.log('✅ Successfully connected to MongoDB Atlas!'))
+    .catch((err) => console.error('❌ MongoDB connection error:', err));
+
+// User Auth Schema
 const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true } 
 });
 const User = mongoose.model('User', userSchema);
 
+// Location Tracking Schema
+const locationSchema = new mongoose.Schema({
+    deviceId: String,
+    latitude: Number,
+    longitude: Number,
+    timestamp: { type: Date, default: Date.now }
+});
+const Location = mongoose.model('Location', locationSchema);
+
+// ==========================================
+// 4. THE KALMAN FILTER (GPS Smoothing)
+// ==========================================
+const kf = new KalmanFilter({
+    observation: {
+        dimension: 2, 
+        sensor: {
+            matrix: [[1, 0], [0, 1]]
+        }
+    },
+    dynamic: {
+        dimension: 2, 
+        transition: [[1, 0], [0, 1]]
+    }
+});
+
+// ==========================================
+// 5. API ROUTES (Login & History)
+// ==========================================
+
 // SIGN UP API
 app.post('/api/signup', async (req, res) => {
     try {
         const { email, password } = req.body;
-        // Check if email already exists
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ error: 'Email already registered!' });
         }
-        // Save new user to MongoDB
         const newUser = new User({ email, password });
         await newUser.save();
         res.status(201).json({ message: 'Account created successfully!' });
@@ -74,7 +105,6 @@ app.post('/api/signup', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        // Check if it's the master admin, OR check the database for the user
         const user = await User.findOne({ email, password });
 
         if ((email === 'admin@geotrack.com' && password === '12345') || user) {
@@ -87,47 +117,9 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-const http = require('http');
-const { Server } = require('socket.io');
-const mongoose = require('mongoose');
-
-const app = express();
-app.set('trust proxy', 1); // 👈 ADD THIS LINE so the rate limiter works on Render
-app.use(express.json());
-// 🌟 NEW: The CORS Security Fix to allow the Admin Password
-app.use(cors({
-    origin: '*',
-    allowedHeaders: ['Content-Type', 'x-admin-key']
-}));
-const server = http.createServer(app);
-
-// Your working Atlas database connection
-const MONGO_URL = process.env.MONGO_URL;
-
-mongoose.connect(MONGO_URL)
-    .then(() => console.log('✅ Successfully connected to MongoDB Atlas!'))
-    .catch((err) => console.error('❌ MongoDB connection error:', err));
-
-const locationSchema = new mongoose.Schema({
-    deviceId: String,
-    latitude: Number,
-    longitude: Number,
-    timestamp: { type: Date, default: Date.now }
-});
-const Location = mongoose.model('Location', locationSchema);
-
-const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
-});
-
-app.use(express.static('public'));
-
-
-// 🌟 NEW: Send the location history to the web dashboard
-
+// GET TRACKING HISTORY
 app.get('/api/history', apiLimiter, async (req, res) => {
     try {
-        // Fetch past locations, sorted from oldest to newest
         const history = await Location.find().sort({ timestamp: 1 });
         res.json(history);
     } catch (error) {
@@ -135,16 +127,10 @@ app.get('/api/history', apiLimiter, async (req, res) => {
     }
 });
 
-// 🌟 NEW: The Admin command to wipe the database
-// 🌟 NEW: Secure Admin command to wipe the database
-// 🌟 NEW: Secure Admin command with Debugging
+// SECURE ADMIN WIPE MAP COMMAND
 app.delete('/api/history', apiLimiter, async (req, res) => {
     const providedKey = req.headers['x-admin-key'];
     const vaultKey = process.env.ADMIN_KEY;
-
-    // 🕵️ THE SPY: Print exactly what both passwords are!
-    console.log(`🧐 DEBUG - Password typed in browser: '${providedKey}'`);
-    console.log(`🧐 DEBUG - Password saved in Render: '${vaultKey}'`);
 
     if (providedKey !== vaultKey) {
         console.log("🚨 Unauthorized wipe attempt blocked!");
@@ -161,34 +147,29 @@ app.delete('/api/history', apiLimiter, async (req, res) => {
     }
 });
 
+// ==========================================
+// 6. SOCKET.IO (Live Map Tracking)
+// ==========================================
 io.on('connection', (socket) => {
     console.log(`📱 New device connected: ${socket.id}`);
 
-   // 🌟 NEW: Upgraded connection logic with smoothing
     socket.on('send-location', async (data) => {
-        // 1. Pack the raw GPS data
         const rawPoint = [data.latitude, data.longitude];
 
         try {
-            // 2. RUN THE SMOOTHING TRAP! 
-            // The filter uses its history to produce a filtered point
+            // Apply smoothing
             const filteredPoint = kf.filter(rawPoint);
-
-            // Break it back down into lat/lon
             const smoothLat = filteredPoint[0];
             const smoothLon = filteredPoint[1];
 
-            // 3. (Optional Debug) See the smoothing difference in your Render logs
-            console.log(`🧐 Raw: ${data.latitude.toFixed(6)},${data.longitude.toFixed(6)} -> Smoothed: ${smoothLat.toFixed(6)},${smoothLon.toFixed(6)}`);
-
-            // 4. Broadcast the SMOOTHED location to the dashboard
+            // Broadcast smooth location
             socket.broadcast.emit('update-map', {
                 id: socket.id,
                 latitude: smoothLat,
                 longitude: smoothLon
             });
 
-            // 5. Permanently save the SMOOTHED location to the cloud database
+            // Save smooth location to database
             const newLocation = new Location({
                 deviceId: socket.id,
                 latitude: smoothLat,
@@ -197,9 +178,21 @@ io.on('connection', (socket) => {
             await newLocation.save();
 
         } catch (error) {
-            console.error("❌ Kalman Filter Error:", error);
-            // Fallback: If the filter fails, just save the raw point so we don't lose data
-            // (Keep your old backup socket.broadcast.emit and newLocation.save() logic here as a fallback)
+            console.error("❌ Kalman Filter Error, using raw point:", error);
+            
+            // Fallback: If filter glitches, save raw point so map still works
+            socket.broadcast.emit('update-map', {
+                id: socket.id,
+                latitude: data.latitude,
+                longitude: data.longitude
+            });
+            
+            const rawLocation = new Location({
+                deviceId: socket.id,
+                latitude: data.latitude,
+                longitude: data.longitude
+            });
+            await rawLocation.save();
         }
     });
 
@@ -209,6 +202,9 @@ io.on('connection', (socket) => {
     });
 });
 
+// ==========================================
+// 7. START THE SERVER
+// ==========================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🚀 GeoTrack server is actively running on port ${PORT}`);

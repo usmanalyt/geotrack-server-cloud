@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors'); // 👈 ADD THIS LINE
 require('dotenv').config();
+const path = require('path');
 // 🌟 NEW: The Kalman GPS Filter (Digital Shock Absorber)
 const KalmanFilter = require('kalman-filter').KalmanFilter;
 
@@ -23,6 +24,56 @@ const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // Limit each IP to 100 requests per windowMs
     message: { error: "🚨 Too many requests from this IP, please try again after 15 minutes." }
+});
+
+// ==========================================
+// 1. HOST THE FRONTEND WEBSITE
+// ==========================================
+// This tells the server to let anyone on the internet view the files in the 'public' folder
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ==========================================
+// 2. USER AUTHENTICATION DATABASE
+// ==========================================
+const userSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true } 
+});
+const User = mongoose.model('User', userSchema);
+
+// SIGN UP API
+app.post('/api/signup', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        // Check if email already exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ error: 'Email already registered!' });
+        }
+        // Save new user to MongoDB
+        const newUser = new User({ email, password });
+        await newUser.save();
+        res.status(201).json({ message: 'Account created successfully!' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// SIGN IN API
+app.post('/api/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        // Check if it's the master admin, OR check the database for the user
+        const user = await User.findOne({ email, password });
+
+        if ((email === 'admin@geotrack.com' && password === '12345') || user) {
+            res.status(200).json({ message: 'Login successful!' });
+        } else {
+            res.status(401).json({ error: 'Incorrect email or password.' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
 const http = require('http');

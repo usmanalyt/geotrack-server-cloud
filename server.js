@@ -60,12 +60,16 @@ app.get('/api/history', apiLimiter, async (req, res) => {
 
 // 🌟 NEW: The Admin command to wipe the database
 // 🌟 NEW: Secure Admin command to wipe the database
+// 🌟 NEW: Secure Admin command with Debugging
 app.delete('/api/history', apiLimiter, async (req, res) => {
-    // 1. Grab the password sent from the web dashboard
     const providedKey = req.headers['x-admin-key'];
+    const vaultKey = process.env.ADMIN_KEY;
 
-    // 2. Check if it matches the vault!
-    if (providedKey !== process.env.ADMIN_KEY) {
+    // 🕵️ THE SPY: Print exactly what both passwords are!
+    console.log(`🧐 DEBUG - Password typed in browser: '${providedKey}'`);
+    console.log(`🧐 DEBUG - Password saved in Render: '${vaultKey}'`);
+
+    if (providedKey !== vaultKey) {
         console.log("🚨 Unauthorized wipe attempt blocked!");
         return res.status(401).send({ error: "Unauthorized: Invalid Admin Key" });
     }

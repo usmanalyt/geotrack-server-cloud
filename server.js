@@ -68,16 +68,29 @@ const Location = mongoose.model('Location', locationSchema);
 // ==========================================
 // 4. THE KALMAN FILTER (GPS Smoothing)
 // ==========================================
+// ==========================================
+// 4. THE KALMAN FILTER (GPS Smoothing)
+// ==========================================
 const kf = new KalmanFilter({
     observation: {
         dimension: 2, 
-        sensor: {
-            matrix: [[1, 0], [0, 1]]
-        }
+        // 👇 Adding the missing margin of error for the sensor
+        covariance: [
+            [1, 0],
+            [0, 1]
+        ]
     },
     dynamic: {
         dimension: 2, 
-        transition: [[1, 0], [0, 1]]
+        transition: [
+            [1, 0],
+            [0, 1]
+        ],
+        // 👇 Adding the missing margin of error for the movement
+        covariance: [
+            [1, 0],
+            [0, 1]
+        ]
     }
 });
 

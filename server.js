@@ -31,7 +31,8 @@ app.use(cors({
 }));
 
 // Host the frontend website (public folder)
-app.use(express.static(path.join(__dirname, 'public')));
+// This tells the server the files are in the main folder, not a subfolder
+app.use(express.static(__dirname));
 
 // Security Bouncer for API endpoints
 const apiLimiter = rateLimit({

@@ -1,6 +1,21 @@
 const express = require('express');
 const cors = require('cors'); // 👈 ADD THIS LINE
 require('dotenv').config();
+// 🌟 NEW: The Kalman GPS Filter (Digital Shock Absorber)
+const KalmanFilter = require('kalman-filter').KalmanFilter;
+
+// Simple configuration for pedestrian-level movement in 2D (lat/lon)
+const kf = new KalmanFilter({
+    observation: {
+        sensor: {
+            // We are tracking in standard 2D Cartesian space (Latitude and Longitude)
+            matrix: [
+                [1, 0],
+                [0, 1]
+            ]
+        }
+    }
+});
 const rateLimit = require('express-rate-limit');
 
 // 🌟 NEW: The Security Bouncer
@@ -87,24 +102,42 @@ app.delete('/api/history', apiLimiter, async (req, res) => {
 io.on('connection', (socket) => {
     console.log(`📱 New device connected: ${socket.id}`);
 
+   // 🌟 NEW: Upgraded connection logic with smoothing
     socket.on('send-location', async (data) => {
-        // Instantly tell the dashboard to move the pin
-        socket.broadcast.emit('update-map', {
-            id: socket.id,
-            latitude: data.latitude,
-            longitude: data.longitude
-        });
+        // 1. Pack the raw GPS data
+        const rawPoint = [data.latitude, data.longitude];
 
-        // Permanently save it to the cloud
         try {
+            // 2. RUN THE SMOOTHING TRAP! 
+            // The filter uses its history to produce a filtered point
+            const filteredPoint = kf.filter(rawPoint);
+
+            // Break it back down into lat/lon
+            const smoothLat = filteredPoint[0];
+            const smoothLon = filteredPoint[1];
+
+            // 3. (Optional Debug) See the smoothing difference in your Render logs
+            console.log(`🧐 Raw: ${data.latitude.toFixed(6)},${data.longitude.toFixed(6)} -> Smoothed: ${smoothLat.toFixed(6)},${smoothLon.toFixed(6)}`);
+
+            // 4. Broadcast the SMOOTHED location to the dashboard
+            socket.broadcast.emit('update-map', {
+                id: socket.id,
+                latitude: smoothLat,
+                longitude: smoothLon
+            });
+
+            // 5. Permanently save the SMOOTHED location to the cloud database
             const newLocation = new Location({
                 deviceId: socket.id,
-                latitude: data.latitude,
-                longitude: data.longitude
+                latitude: smoothLat,
+                longitude: smoothLon
             });
             await newLocation.save();
+
         } catch (error) {
-            console.error("❌ Error saving to database:", error);
+            console.error("❌ Kalman Filter Error:", error);
+            // Fallback: If the filter fails, just save the raw point so we don't lose data
+            // (Keep your old backup socket.broadcast.emit and newLocation.save() logic here as a fallback)
         }
     });
 

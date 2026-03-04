@@ -77,6 +77,15 @@ const kf = new KalmanFilter({
 // ==========================================
 // 5. API ROUTES (Login & History)
 // ==========================================
+
+
+// 🎯 THE BULLETPROOF FIX: Force the server to deliver the login page
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// SIGN UP API
+// ... (the rest of your signup code stays here)
 app.post('/api/signup', async (req, res) => {
     try {
         const { email, password } = req.body;

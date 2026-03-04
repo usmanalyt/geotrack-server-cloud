@@ -20,7 +20,6 @@
             padding: 0;
         }
 
-        /* Glassmorphism Effects */
         .glass-panel {
             background: rgba(30, 41, 59, 0.85);
             backdrop-filter: blur(20px);
@@ -40,13 +39,9 @@
             z-index: 0;
         }
 
-        /* Fix Leaflet Controls for Mobile */
-        .leaflet-control-container .leaflet-top { top: 80px; }
-        @media (max-width: 768px) {
-            .leaflet-control-container .leaflet-top { top: 70px; }
-        }
+        /* Shift the bottom-right controls up slightly so they don't hide behind mobile browsers */
+        .leaflet-control-container .leaflet-bottom { bottom: 20px; }
 
-        /* Pulsing Status Dot */
         .status-dot {
             width: 8px;
             height: 8px;
@@ -61,7 +56,6 @@
             50% { opacity: 0.5; }
         }
 
-        /* Premium Map Marker */
         .custom-marker {
             background: #06b6d4;
             border: 3px solid white;
@@ -71,11 +65,11 @@
         }
 
         .fade-in {
-            animation: fadeIn 0.5s ease-in-out;
+            animation: fadeIn 0.3s ease-in-out;
         }
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
     </style>
 </head>
@@ -101,10 +95,14 @@
             <div class="glass-card px-3 py-1.5 md:px-4 md:py-2 rounded-lg flex items-center gap-2">
                 <i class="fa-solid fa-mobile-screen text-cyan-400 text-sm"></i>
                 <span class="text-white font-semibold text-sm md:text-base" id="deviceCount">0</span>
-                <span class="hidden md:inline text-slate-500 text-xs">Active Devices</span>
+                <span class="hidden md:inline text-slate-500 text-xs">Active</span>
             </div>
 
             <div class="flex gap-2">
+                <button id="togglePanelBtn" class="bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-400 border border-indigo-500/30 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-all text-sm">
+                    <i class="fa-solid fa-chart-simple md:mr-2"></i><span class="hidden md:inline"> Details</span>
+                </button>
+
                 <button id="wipeBtn" class="bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-all text-sm">
                     <i class="fa-solid fa-trash-can md:mr-2"></i><span class="hidden md:inline"> Wipe</span>
                 </button>
@@ -117,7 +115,7 @@
 
     <div id="map" class="absolute inset-0"></div>
     
-    <div class="absolute bottom-6 left-4 right-4 md:bottom-auto md:top-24 md:left-auto md:right-6 md:w-80 z-[1000] glass-panel rounded-xl p-4 md:p-5 shadow-2xl fade-in">
+    <div id="infoPanel" class="absolute bottom-6 left-4 right-4 md:bottom-auto md:top-24 md:left-auto md:right-6 md:w-80 z-[1000] glass-panel rounded-xl p-4 md:p-5 shadow-2xl fade-in transition-all">
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-white font-semibold text-sm md:text-base">Live Tracking</h3>
             <span class="text-xs font-bold text-cyan-400 tracking-wider">● LIVE</span>
@@ -138,19 +136,17 @@
         </div>
     </div>
 
-    <div id="toast" class="fixed bottom-24 md:bottom-6 right-4 md:right-6 glass-panel px-4 py-3 rounded-lg shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-[10000] flex items-center gap-3">
+    <div id="toast" class="fixed bottom-24 md:bottom-6 left-4 md:left-auto md:right-6 glass-panel px-4 py-3 rounded-lg shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-[10000] flex items-center gap-3">
         <i class="fa-solid fa-circle-check text-green-400"></i>
         <span class="text-white text-sm" id="toastMessage">Action completed</span>
     </div>
 
     <script>
         // ==========================================
-        // 1. AUTHENTICATION CHECK
+        // 1. AUTHENTICATION & UI TOGGLES
         // ==========================================
         function checkAuth() {
-            if (localStorage.getItem('geotrack_auth') !== 'true') {
-                window.location.href = 'index.html';
-            }
+            if (localStorage.getItem('geotrack_auth') !== 'true') window.location.href = 'index.html';
         }
         checkAuth();
 
@@ -159,58 +155,48 @@
             window.location.href = 'index.html';
         }
 
-        // ==========================================
-        // 2. PREMIUM MAP CONFIGURATION (Google Maps)
-        // ==========================================
-        // Google Streets View
-        const googleStreets = L.tileLayer('http://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}', {
-            maxZoom: 22,
-            attribution: '&copy; Google Maps'
+        // 🎯 NEW: Toggle the details panel when the button is clicked
+        document.getElementById('togglePanelBtn').addEventListener('click', () => {
+            const panel = document.getElementById('infoPanel');
+            panel.classList.toggle('hidden');
         });
 
-        // Google Hybrid (Satellite + Streets)
-        const googleHybrid = L.tileLayer('http://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}', {
-            maxZoom: 22,
-            attribution: '&copy; Google Maps'
-        });
-
-        // Dark Mode 
-        const darkMapStyle = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            maxZoom: 20,
-            attribution: '&copy; CARTO'
-        });
+        // ==========================================
+        // 2. PREMIUM MAP CONFIGURATION
+        // ==========================================
+        const googleStreets = L.tileLayer('http://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}', { maxZoom: 22 });
+        const googleHybrid = L.tileLayer('http://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}', { maxZoom: 22 });
+        const darkMapStyle = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 });
 
         const map = L.map('map', {
-            center: [4.2105, 101.9758], // Centers on Malaysia
+            center: [4.2105, 101.9758],
             zoom: 6,
-            layers: [googleStreets], // Default view
+            layers: [googleStreets], 
             zoomControl: false,
             attributionControl: false
         });
 
-        // Move zoom controls to the top right so they don't block the mobile panel
-        L.control.zoom({ position: 'topright' }).addTo(map);
+        // 🎯 NEW: Move zoom and layer controls OUT of the way to the Bottom Right
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
 
         L.control.layers({
             "🗺️ Google Streets": googleStreets,
             "🌍 Google Satellite": googleHybrid,
             "🌑 Dark Mode": darkMapStyle
-        }, null, { position: 'topright' }).addTo(map);
+        }, null, { position: 'bottomright' }).addTo(map);
 
         // ==========================================
-        // 3. SOCKET CONNECTION & TRACKING
+        // 3. SOCKET CONNECTION, TRACKING & TRAILS
         // ==========================================
         const SERVER_URL = 'https://geotrack-server-cloud-1.onrender.com';
         const socket = io(SERVER_URL, {
             transports: ['websocket', 'polling'],
-            reconnection: true,
-            reconnectionDelay: 1000,
-            reconnectionAttempts: 5
+            reconnection: true
         });
 
         const deviceMarkers = {};
+        const deviceTrails = {};
 
-        // Connection Status
         socket.on('connect', () => {
             document.getElementById('connectionDot').classList.replace('bg-red-500', 'bg-green-500');
             document.getElementById('connectionText').textContent = 'Connected';
@@ -223,64 +209,57 @@
             showToast('Connection lost', 'error');
         });
 
-        // Update Map Pin
         function updateMapPin(deviceId, lat, lng, accuracy = 0, speed = 0) {
             const now = new Date();
             document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
             document.getElementById('accuracy').textContent = accuracy > 0 ? `${accuracy.toFixed(1)} m` : '-- m';
             document.getElementById('speed').textContent = speed > 0 ? `${speed.toFixed(1)} km/h` : '-- km/h';
 
+            // 1. Pin Update
             if (deviceMarkers[deviceId]) {
                 deviceMarkers[deviceId].setLatLng([lat, lng]);
             } else {
-                const customIcon = L.divIcon({
-                    className: 'custom-marker',
-                    iconSize: [20, 20],
-                    iconAnchor: [10, 10]
-                });
-
-                deviceMarkers[deviceId] = L.marker([lat, lng], { icon: customIcon })
-                    .addTo(map)
-                    .bindPopup(`
-                        <div class="text-center p-2">
-                            <h3 class="font-bold text-slate-800 mb-1">Device: ${deviceId.substring(0,6)}...</h3>
-                            <p class="text-xs text-slate-500">Lat: ${lat.toFixed(6)}</p>
-                            <p class="text-xs text-slate-500">Lng: ${lng.toFixed(6)}</p>
-                        </div>
-                    `);
+                const customIcon = L.divIcon({ className: 'custom-marker', iconSize: [20, 20], iconAnchor: [10, 10] });
+                deviceMarkers[deviceId] = L.marker([lat, lng], { icon: customIcon }).addTo(map)
+                    .bindPopup(`<div class="text-center p-2"><h3 class="font-bold text-slate-800 mb-1">Device: ${deviceId.substring(0,6)}</h3></div>`);
+            }
+            
+            // 2. Trail Update
+            if (deviceTrails[deviceId]) {
+                deviceTrails[deviceId].addLatLng([lat, lng]);
+            } else {
+                deviceTrails[deviceId] = L.polyline([[lat, lng]], {
+                    color: '#06b6d4', weight: 4, opacity: 0.8, lineJoin: 'round', dashArray: '10, 10'
+                }).addTo(map);
             }
             
             document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
-            map.setView([lat, lng], 18); // Zoom in tightly to the Google Maps street level
+            map.setView([lat, lng], 18); 
         }
 
-        // Fetch History
         fetch(`${SERVER_URL}/api/history`)
             .then(res => res.json())
             .then(data => {
-                if (data.length > 0) {
-                    const lastPoint = data[data.length - 1];
-                    map.setView([lastPoint.latitude, lastPoint.longitude], 16);
-                }
+                if (data.length > 0) map.setView([data[data.length - 1].latitude, data[data.length - 1].longitude], 16);
             })
             .catch(err => console.error('Error fetching history:', err));
 
-        // Real-time Updates
-        socket.on('update-map', (data) => {
-            updateMapPin(data.id, data.latitude, data.longitude, data.accuracy, data.speed);
-        });
+        socket.on('update-map', (data) => updateMapPin(data.id, data.latitude, data.longitude, data.accuracy, data.speed));
 
-        // Disconnect Listener
         socket.on('device-disconnected', (deviceId) => {
             if (deviceMarkers[deviceId]) {
                 map.removeLayer(deviceMarkers[deviceId]);
                 delete deviceMarkers[deviceId];
                 
+                if (deviceTrails[deviceId]) {
+                    map.removeLayer(deviceTrails[deviceId]);
+                    delete deviceTrails[deviceId];
+                }
+                
                 document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
                 document.getElementById('lastUpdate').textContent = "--:--:--";
                 document.getElementById('accuracy').textContent = "-- m";
                 document.getElementById('speed').textContent = "-- km/h";
-                
                 showToast('Tracker disconnected', 'error');
             }
         });
@@ -292,17 +271,12 @@
             const pass = prompt('Enter Admin Password to wipe the database:');
             if (!pass) return;
 
-            fetch(`${SERVER_URL}/api/history`, {
-                method: 'DELETE',
-                headers: { 'x-admin-key': pass }
-            })
+            fetch(`${SERVER_URL}/api/history`, { method: 'DELETE', headers: { 'x-admin-key': pass } })
             .then(res => {
                 if (res.ok) {
                     showToast('Database wiped successfully!', 'success');
-                    for (let id in deviceMarkers) {
-                        map.removeLayer(deviceMarkers[id]);
-                        delete deviceMarkers[id];
-                    }
+                    for (let id in deviceMarkers) { map.removeLayer(deviceMarkers[id]); delete deviceMarkers[id]; }
+                    for (let id in deviceTrails) { map.removeLayer(deviceTrails[id]); delete deviceTrails[id]; }
                     document.getElementById('deviceCount').textContent = '0';
                 } else {
                     showToast('Access Denied: Incorrect Password', 'error');
@@ -311,25 +285,12 @@
             .catch(err => showToast('Error wiping database', 'error'));
         });
 
-        // ==========================================
-        // 5. UTILITY FUNCTIONS
-        // ==========================================
         function showToast(message, type) {
             const toast = document.getElementById('toast');
-            const toastMsg = document.getElementById('toastMessage');
-            const icon = toast.querySelector('i');
-            
-            toastMsg.textContent = message;
-            
-            if (type === 'error') {
-                icon.className = 'fa-solid fa-circle-xmark text-red-400';
-            } else {
-                icon.className = 'fa-solid fa-circle-check text-green-400';
-            }
-
+            toast.querySelector('span').textContent = message;
+            toast.querySelector('i').className = type === 'error' ? 'fa-solid fa-circle-xmark text-red-400' : 'fa-solid fa-circle-check text-green-400';
             toast.classList.remove('opacity-0', 'translate-y-20');
             toast.classList.add('opacity-100', 'translate-y-0');
-
             setTimeout(() => {
                 toast.classList.remove('opacity-100', 'translate-y-0');
                 toast.classList.add('opacity-0', 'translate-y-20');

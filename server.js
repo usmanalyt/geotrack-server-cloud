@@ -229,13 +229,15 @@ io.on('connection', (socket) => {
         io.emit('device-disconnected', socket.id);
     });
 
-    // ==========================================
+// ==========================================
 // 7. START THE SERVER
 // ==========================================
-const PORT = process.env.PORT || 3000;
+// We use 10000 as a fallback because that is Render's favorite port
+const PORT = process.env.PORT || 10000;
 
-// 🎯 THE FIX: Explicitly bind to '0.0.0.0' so Render can connect it to the internet
+// 🎯 We explicitly bind to '0.0.0.0' so the internet can reach it
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 GeoTrack server is actively running on port ${PORT}`);
+    console.log(`🚀 GeoTrack server is actively listening on 0.0.0.0:${PORT}`);
+    console.log(`✅ Ready to receive GPS data!`);
 });
 });

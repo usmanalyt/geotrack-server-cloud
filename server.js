@@ -89,8 +89,11 @@ app.get('/', (req, res) => {
 });
 
 // Configure the Mailman (Nodemailer)
+// Configure the Mailman (Nodemailer) - Upgraded to prevent Render Timeouts
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // Forces a secure IPv4 SSL connection
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS

@@ -164,6 +164,9 @@ app.delete('/api/history', apiLimiter, async (req, res) => {
 // ==========================================
 // 6. SOCKET.IO (Live Map Tracking)
 // ==========================================
+// 🌟 NEW: Keep track of the "state" for each device so the filter remembers where they were
+const deviceStates = {}; 
+
 io.on('connection', (socket) => {
     console.log(`📱 New device connected: ${socket.id}`);
 
@@ -171,10 +174,21 @@ io.on('connection', (socket) => {
         const rawPoint = [data.latitude, data.longitude];
 
         try {
-            // Apply smoothing
-            const filteredPoint = kf.filter(rawPoint);
-            const smoothLat = filteredPoint[0];
-            const smoothLon = filteredPoint[1];
+            // Use the previous state if it exists, otherwise start fresh
+            const previousState = deviceStates[socket.id];
+            
+            // 🎯 THE FIX: Use 'filter' correctly for single-point updates
+            // In this specific library, for live points, we pass the point as a single-item array
+            const filteredResult = kf.filter({
+                observation: rawPoint,
+                previousCorrected: previousState
+            });
+
+            // Save this state for the NEXT point that arrives
+            deviceStates[socket.id] = filteredResult;
+
+            const smoothLat = filteredResult.mean[0][0];
+            const smoothLon = filteredResult.mean[1][0];
 
             // Broadcast smooth location
             socket.broadcast.emit('update-map', {
@@ -183,7 +197,7 @@ io.on('connection', (socket) => {
                 longitude: smoothLon
             });
 
-            // Save smooth location to database
+            // Save to database
             const newLocation = new Location({
                 deviceId: socket.id,
                 latitude: smoothLat,
@@ -192,9 +206,8 @@ io.on('connection', (socket) => {
             await newLocation.save();
 
         } catch (error) {
-            console.error("❌ Kalman Filter Error, using raw point:", error);
+            console.error("❌ Smoothing Error, using raw point:", error);
             
-            // Fallback: If filter glitches, save raw point so map still works
             socket.broadcast.emit('update-map', {
                 id: socket.id,
                 latitude: data.latitude,
@@ -212,14 +225,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log(`🔌 Device disconnected: ${socket.id}`);
+        delete deviceStates[socket.id]; // Clean up memory
         io.emit('device-disconnected', socket.id);
     });
-});
-
-// ==========================================
-// 7. START THE SERVER
-// ==========================================
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`🚀 GeoTrack server is actively running on port ${PORT}`);
 });

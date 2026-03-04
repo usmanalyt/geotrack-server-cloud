@@ -298,16 +298,14 @@
             showToast('Connection error', 'error');
         });
 
-        // Update Map Pin
+// Update Map Pin
         function updateMapPin(deviceId, lat, lng, accuracy = 0, speed = 0) {
             const now = new Date();
             document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
             document.getElementById('accuracy').textContent = accuracy > 0 ? `${accuracy} m` : '-- m';
             document.getElementById('speed').textContent = speed > 0 ? `${speed} km/h` : '-- km/h';
 
-            // Update device count
-            document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
-
+            // 1. Check if marker exists, if not, create it FIRST
             if (deviceMarkers[deviceId]) {
                 deviceMarkers[deviceId].setLatLng([lat, lng]);
             } else {
@@ -328,6 +326,10 @@
                         </div>
                     `);
             }
+            
+            // 2. NOW update the counter so the math is correct! (Fixes 0 Active Devices)
+            document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
+            
             map.setView([lat, lng], 17);
         }
 
@@ -337,40 +339,37 @@
             .then(data => {
                 if (data.length > 0) {
                     const lastPoint = data[data.length - 1];
-                    updateMapPin(
-                        lastPoint.deviceId || 'Phone', 
-                        lastPoint.latitude, 
-                        lastPoint.longitude,
-                        lastPoint.accuracy || 0,
-                        lastPoint.speed || 0
-                    );
+                    // 3. Just center the camera on the last known location. 
+                    // Do NOT create a "fake" live pin from past history. (Fixes Ghost Pin)
+                    map.setView([lastPoint.latitude, lastPoint.longitude], 16);
                 }
             })
             .catch(err => console.error('Error fetching history:', err));
 
         // Real-time Updates
-        // 🎯 NEW: Remove pin when a device disconnects
+        socket.on('update-map', (data) => {
+            updateMapPin(
+                data.id, 
+                data.latitude, 
+                data.longitude,
+                data.accuracy || 0,
+                data.speed || 0
+            );
+        });
+
+        // 4. THE MISSING DISCONNECT LISTENER (Removes pin when phone stops tracking)
         socket.on('device-disconnected', (deviceId) => {
-            console.log("Device went offline:", deviceId);
-            
-            // Check if the marker exists on the map
             if (deviceMarkers[deviceId]) {
-                // 1. Remove the pin from the Leaflet map
                 map.removeLayer(deviceMarkers[deviceId]);
-                
-                // 2. Delete the record from our tracker memory
                 delete deviceMarkers[deviceId];
                 
-                // 3. Instantly update the counter UI
                 document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
                 
-                // 4. Reset the info panel to dashed lines
                 document.getElementById('lastUpdate').textContent = "--:--:--";
                 document.getElementById('accuracy').textContent = "-- m";
                 document.getElementById('speed').textContent = "-- km/h";
-
-                // Optional: Show a little notification
-                showToast('A tracker went offline', 'error');
+                
+                showToast('Tracker disconnected', 'error');
             }
         });
 

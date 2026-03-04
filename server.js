@@ -131,7 +131,7 @@ app.post('/api/forgot-password', async (req, res) => {
 
     } catch (error) {
         console.error("Mail Error:", error);
-        res.status(500).json({ error: 'Error sending email. Check Render environment variables.' });
+        res.status(500).json({ error: 'Error sending code.' });
     }
 });
 

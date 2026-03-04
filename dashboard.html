@@ -349,14 +349,29 @@
             .catch(err => console.error('Error fetching history:', err));
 
         // Real-time Updates
-        socket.on('update-map', (data) => {
-            updateMapPin(
-                data.id, 
-                data.latitude, 
-                data.longitude,
-                data.accuracy || 0,
-                data.speed || 0
-            );
+        // 🎯 NEW: Remove pin when a device disconnects
+        socket.on('device-disconnected', (deviceId) => {
+            console.log("Device went offline:", deviceId);
+            
+            // Check if the marker exists on the map
+            if (deviceMarkers[deviceId]) {
+                // 1. Remove the pin from the Leaflet map
+                map.removeLayer(deviceMarkers[deviceId]);
+                
+                // 2. Delete the record from our tracker memory
+                delete deviceMarkers[deviceId];
+                
+                // 3. Instantly update the counter UI
+                document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
+                
+                // 4. Reset the info panel to dashed lines
+                document.getElementById('lastUpdate').textContent = "--:--:--";
+                document.getElementById('accuracy').textContent = "-- m";
+                document.getElementById('speed').textContent = "-- km/h";
+
+                // Optional: Show a little notification
+                showToast('A tracker went offline', 'error');
+            }
         });
 
         // ==========================================

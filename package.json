@@ -17,6 +17,7 @@
     "express-rate-limit": "^8.2.1",
     "kalman-filter": "^2.3.0",
     "mongoose": "^9.2.1",
+    "nodemailer": "^8.0.1",
     "socket.io": "^4.8.3"
   }
 }

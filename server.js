@@ -10,6 +10,8 @@ const cors = require('cors');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const { KalmanFilter } = require('kalman-filter');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -47,7 +49,9 @@ mongoose.connect(MONGO_URL)
 
 const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
-    password: { type: String, required: true } 
+    password: { type: String, required: true },
+    resetCode: { type: String },
+    resetCodeExpires: { type: Date }
 });
 const User = mongoose.model('User', userSchema);
 
@@ -84,6 +88,76 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// Configure the Mailman (Nodemailer)
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
+
+// FORGOT PASSWORD API (Sends the email)
+app.post('/api/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ error: 'No account found with that email.' });
+        }
+
+        // Generate a 6-digit random code
+        const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // Save code and expiration (15 minutes from now)
+        user.resetCode = resetCode;
+        user.resetCodeExpires = Date.now() + 15 * 60 * 1000;
+        await user.save();
+
+        // Send the email
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: user.email,
+            subject: 'GeoTrack - Password Reset Code',
+            text: `Your password reset code is: ${resetCode}\n\nThis code will expire in 15 minutes.`
+        };
+
+        await transporter.sendMail(mailOptions);
+        res.status(200).json({ message: 'Recovery code sent to your email.' });
+
+    } catch (error) {
+        console.error("Mail Error:", error);
+        res.status(500).json({ error: 'Error sending email. Check Render environment variables.' });
+    }
+});
+
+// RESET PASSWORD API (Verifies code and saves new password)
+app.post('/api/reset-password', async (req, res) => {
+    try {
+        const { email, code, newPassword } = req.body;
+        // Find user with matching email, matching code, AND code hasn't expired yet
+        const user = await User.findOne({ 
+            email, 
+            resetCode: code, 
+            resetCodeExpires: { $gt: Date.now() } 
+        });
+
+        if (!user) {
+            return res.status(400).json({ error: 'Invalid or expired reset code.' });
+        }
+
+        // Update password and erase the temporary codes
+        user.password = newPassword;
+        user.resetCode = undefined;
+        user.resetCodeExpires = undefined;
+        await user.save();
+
+        res.status(200).json({ message: 'Password successfully reset!' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
 // SIGN UP API
 // ... (the rest of your signup code stays here)
 app.post('/api/signup', async (req, res) => {

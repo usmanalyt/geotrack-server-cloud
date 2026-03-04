@@ -11,7 +11,6 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const { KalmanFilter } = require('kalman-filter');
 
-// Initialize App & Server
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -21,24 +20,20 @@ const io = new Server(server, {
 // ==========================================
 // 2. MIDDLEWARE & SECURITY
 // ==========================================
-app.set('trust proxy', 1); // Allows rate limiter to work on Render
+app.set('trust proxy', 1);
 app.use(express.json());
-
-// CORS Security Fix
 app.use(cors({
     origin: '*',
     allowedHeaders: ['Content-Type', 'x-admin-key']
 }));
 
-// Host the frontend website (public folder)
-// This tells the server the files are in the main folder, not a subfolder
+// Host the frontend website 
 app.use(express.static(__dirname));
 
-// Security Bouncer for API endpoints
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // 100 requests per window
-    message: { error: "🚨 Too many requests from this IP, please try again after 15 minutes." }
+    windowMs: 15 * 60 * 1000, 
+    max: 100, 
+    message: { error: "🚨 Too many requests from this IP, please try again." }
 });
 
 // ==========================================
@@ -50,14 +45,12 @@ mongoose.connect(MONGO_URL)
     .then(() => console.log('✅ Successfully connected to MongoDB Atlas!'))
     .catch((err) => console.error('❌ MongoDB connection error:', err));
 
-// User Auth Schema
 const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true } 
 });
 const User = mongoose.model('User', userSchema);
 
-// Location Tracking Schema
 const locationSchema = new mongoose.Schema({
     deviceId: String,
     latitude: Number,
@@ -69,44 +62,27 @@ const Location = mongoose.model('Location', locationSchema);
 // ==========================================
 // 4. THE KALMAN FILTER (GPS Smoothing)
 // ==========================================
-// ==========================================
-// 4. THE KALMAN FILTER (GPS Smoothing)
-// ==========================================
 const kf = new KalmanFilter({
     observation: {
         dimension: 2, 
-        // 👇 Adding the missing margin of error for the sensor
-        covariance: [
-            [1, 0],
-            [0, 1]
-        ]
+        covariance: [[1, 0], [0, 1]]
     },
     dynamic: {
         dimension: 2, 
-        transition: [
-            [1, 0],
-            [0, 1]
-        ],
-        // 👇 Adding the missing margin of error for the movement
-        covariance: [
-            [1, 0],
-            [0, 1]
-        ]
+        transition: [[1, 0], [0, 1]],
+        covariance: [[1, 0], [0, 1]]
     }
 });
 
 // ==========================================
 // 5. API ROUTES (Login & History)
 // ==========================================
-
-// SIGN UP API
 app.post('/api/signup', async (req, res) => {
     try {
         const { email, password } = req.body;
         const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ error: 'Email already registered!' });
-        }
+        if (existingUser) return res.status(400).json({ error: 'Email already registered!' });
+        
         const newUser = new User({ email, password });
         await newUser.save();
         res.status(201).json({ message: 'Account created successfully!' });
@@ -115,7 +91,6 @@ app.post('/api/signup', async (req, res) => {
     }
 });
 
-// SIGN IN API
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -131,7 +106,6 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// GET TRACKING HISTORY
 app.get('/api/history', apiLimiter, async (req, res) => {
     try {
         const history = await Location.find().sort({ timestamp: 1 });
@@ -141,22 +115,17 @@ app.get('/api/history', apiLimiter, async (req, res) => {
     }
 });
 
-// SECURE ADMIN WIPE MAP COMMAND
 app.delete('/api/history', apiLimiter, async (req, res) => {
     const providedKey = req.headers['x-admin-key'];
     const vaultKey = process.env.ADMIN_KEY;
 
-    if (providedKey !== vaultKey) {
-        console.log("🚨 Unauthorized wipe attempt blocked!");
-        return res.status(401).send({ error: "Unauthorized: Invalid Admin Key" });
-    }
+    if (providedKey !== vaultKey) return res.status(401).send({ error: "Unauthorized" });
 
     try {
         await Location.deleteMany({}); 
-        console.log("🗑️ Database history wiped by verified admin.");
+        console.log("🗑️ Database history wiped.");
         res.status(200).send({ message: "History cleared successfully!" });
     } catch (err) {
-        console.error("Failed to clear history:", err);
         res.status(500).send({ error: "Failed to clear history" });
     }
 });
@@ -164,7 +133,6 @@ app.delete('/api/history', apiLimiter, async (req, res) => {
 // ==========================================
 // 6. SOCKET.IO (Live Map Tracking)
 // ==========================================
-// 🌟 NEW: Keep track of the "state" for each device so the filter remembers where they were
 const deviceStates = {}; 
 
 io.on('connection', (socket) => {
@@ -174,70 +142,39 @@ io.on('connection', (socket) => {
         const rawPoint = [data.latitude, data.longitude];
 
         try {
-            // Use the previous state if it exists, otherwise start fresh
             const previousState = deviceStates[socket.id];
-            
-            // 🎯 THE FIX: Use 'filter' correctly for single-point updates
-            // In this specific library, for live points, we pass the point as a single-item array
             const filteredResult = kf.filter({
                 observation: rawPoint,
                 previousCorrected: previousState
             });
 
-            // Save this state for the NEXT point that arrives
             deviceStates[socket.id] = filteredResult;
-
             const smoothLat = filteredResult.mean[0][0];
             const smoothLon = filteredResult.mean[1][0];
 
-            // Broadcast smooth location
-            socket.broadcast.emit('update-map', {
-                id: socket.id,
-                latitude: smoothLat,
-                longitude: smoothLon
-            });
+            socket.broadcast.emit('update-map', { id: socket.id, latitude: smoothLat, longitude: smoothLon });
 
-            // Save to database
-            const newLocation = new Location({
-                deviceId: socket.id,
-                latitude: smoothLat,
-                longitude: smoothLon
-            });
+            const newLocation = new Location({ deviceId: socket.id, latitude: smoothLat, longitude: smoothLon });
             await newLocation.save();
-
         } catch (error) {
-            console.error("❌ Smoothing Error, using raw point:", error);
-            
-            socket.broadcast.emit('update-map', {
-                id: socket.id,
-                latitude: data.latitude,
-                longitude: data.longitude
-            });
-            
-            const rawLocation = new Location({
-                deviceId: socket.id,
-                latitude: data.latitude,
-                longitude: data.longitude
-            });
+            socket.broadcast.emit('update-map', { id: socket.id, latitude: data.latitude, longitude: data.longitude });
+            const rawLocation = new Location({ deviceId: socket.id, latitude: data.latitude, longitude: data.longitude });
             await rawLocation.save();
         }
     });
 
     socket.on('disconnect', () => {
-        console.log(`🔌 Device disconnected: ${socket.id}`);
-        delete deviceStates[socket.id]; // Clean up memory
+        delete deviceStates[socket.id]; 
         io.emit('device-disconnected', socket.id);
     });
+});
 
 // ==========================================
 // 7. START THE SERVER
 // ==========================================
-// We use 10000 as a fallback because that is Render's favorite port
 const PORT = process.env.PORT || 10000;
 
-// 🎯 We explicitly bind to '0.0.0.0' so the internet can reach it
+// Tell Render specifically to expose this port to the internet
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 GeoTrack server is actively listening on 0.0.0.0:${PORT}`);
-    console.log(`✅ Ready to receive GPS data!`);
-});
 });

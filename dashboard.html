@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GeoTrack | Live Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -16,27 +16,22 @@
             font-family: 'Outfit', sans-serif;
             background-color: #0f172a;
             overflow: hidden;
+            margin: 0;
+            padding: 0;
         }
 
+        /* Glassmorphism Effects */
         .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
+            background: rgba(30, 41, 59, 0.85);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .glass-card {
-            background: rgba(15, 23, 42, 0.6);
+            background: rgba(15, 23, 42, 0.7);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .neon-text {
-            text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
-        }
-
-        .neon-border {
-            box-shadow: 0 0 15px rgba(6, 182, 212, 0.2);
         }
 
         #map {
@@ -45,17 +40,13 @@
             z-index: 0;
         }
 
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: rgba(30, 41, 59, 0.5);
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(6, 182, 212, 0.5);
-            border-radius: 3px;
+        /* Fix Leaflet Controls for Mobile */
+        .leaflet-control-container .leaflet-top { top: 80px; }
+        @media (max-width: 768px) {
+            .leaflet-control-container .leaflet-top { top: 70px; }
         }
 
+        /* Pulsing Status Dot */
         .status-dot {
             width: 8px;
             height: 8px;
@@ -70,11 +61,13 @@
             50% { opacity: 0.5; }
         }
 
+        /* Premium Map Marker */
         .custom-marker {
-            background: rgba(6, 182, 212, 0.9);
-            border: 2px solid white;
+            background: #06b6d4;
+            border: 3px solid white;
             border-radius: 50%;
-            box-shadow: 0 0 20px rgba(6, 182, 212, 0.5);
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.8), 0 0 30px rgba(6, 182, 212, 0.4);
+            transition: all 0.3s ease;
         }
 
         .fade-in {
@@ -84,134 +77,70 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
-        .connection-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.75rem;
-        }
-
-        /* Background Grid */
-        .bg-mesh {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background-image: 
-                radial-gradient(circle at 15% 50%, rgba(76, 29, 149, 0.15) 0%, transparent 25%),
-                radial-gradient(circle at 85% 30%, rgba(6, 182, 212, 0.15) 0%, transparent 25%);
-            z-index: -2;
-        }
-
-        .grid-overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-size: 50px 50px;
-            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-                              linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-            z-index: -1;
-            mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
-        }
-
-        /* Toast Animation */
-        .toast-enter {
-            transform: translateY(100px);
-            opacity: 0;
-        }
-        .toast-enter-active {
-            transform: translateY(0);
-            opacity: 1;
-            transition: all 0.3s ease;
-        }
-        .toast-exit {
-            transform: translateY(100px);
-            opacity: 0;
-            transition: all 0.3s ease;
-        }
     </style>
 </head>
-<body class="h-screen w-full flex flex-col relative">
+<body class="h-screen w-full relative">
 
-    <!-- Background Elements -->
-    <div class="bg-mesh"></div>
-    <div class="grid-overlay"></div>
-
-    <!-- Header -->
-    <header class="glass-panel z-50 px-6 py-4 flex justify-between items-center shadow-lg">
-        <div class="flex items-center gap-4">
-            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg">
-                <i class="fa-solid fa-location-crosshairs text-white"></i>
+    <header class="glass-panel z-[1000] absolute top-0 left-0 right-0 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center shadow-lg">
+        <div class="flex items-center gap-3 md:gap-4">
+            <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg">
+                <i class="fa-solid fa-location-crosshairs text-white text-sm md:text-base"></i>
             </div>
             <div>
-                <h1 class="text-xl font-bold text-white tracking-tight">
+                <h1 class="text-lg md:text-xl font-bold text-white tracking-tight leading-tight">
                     Geo<span class="text-cyan-400">Track</span>
                 </h1>
-                <div class="connection-status">
+                <div class="flex items-center gap-2 text-[10px] md:text-xs">
                     <div class="status-dot" id="connectionDot"></div>
-                    <span class="text-slate-400 text-xs" id="connectionText">Connecting...</span>
+                    <span class="text-slate-400" id="connectionText">Connecting...</span>
                 </div>
             </div>
         </div>
 
-        <div class="flex items-center gap-4">
-            <!-- Device Counter -->
-            <div class="glass-card px-4 py-2 rounded-lg flex items-center gap-2">
-                <i class="fa-solid fa-mobile-screen text-cyan-400"></i>
-                <span class="text-white font-semibold" id="deviceCount">0</span>
-                <span class="text-slate-500 text-xs">Active Devices</span>
+        <div class="flex items-center gap-2 md:gap-4">
+            <div class="glass-card px-3 py-1.5 md:px-4 md:py-2 rounded-lg flex items-center gap-2">
+                <i class="fa-solid fa-mobile-screen text-cyan-400 text-sm"></i>
+                <span class="text-white font-semibold text-sm md:text-base" id="deviceCount">0</span>
+                <span class="hidden md:inline text-slate-500 text-xs">Active Devices</span>
             </div>
 
-            <!-- Map Controls -->
             <div class="flex gap-2">
-                <button id="wipeBtn" class="bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 px-4 py-2 rounded-lg font-medium transition-all hover:shadow-lg hover:shadow-red-500/20">
-                    <i class="fa-solid fa-trash-can mr-2"></i> Wipe
+                <button id="wipeBtn" class="bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-all text-sm">
+                    <i class="fa-solid fa-trash-can md:mr-2"></i><span class="hidden md:inline"> Wipe</span>
                 </button>
-                <button onclick="logout()" class="bg-slate-700/50 hover:bg-slate-600/50 text-white border border-slate-600 px-4 py-2 rounded-lg font-medium transition-all">
-                    <i class="fa-solid fa-right-from-bracket mr-2"></i> Logout
+                <button onclick="logout()" class="bg-slate-700/50 hover:bg-slate-600/50 text-white border border-slate-600 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-all text-sm">
+                    <i class="fa-solid fa-right-from-bracket md:mr-2"></i><span class="hidden md:inline"> Logout</span>
                 </button>
             </div>
         </div>
     </header>
 
-    <!-- Main Content -->
-    <div class="flex-grow relative z-10">
-        <div id="map" class="absolute inset-0"></div>
-        
-        <!-- Floating Info Panel -->
-        <div class="absolute top-20 right-4 z-[1000] w-72 glass-panel rounded-xl p-4 shadow-2xl fade-in">
-            <div class="flex justify-between items-center mb-3">
-                <h3 class="text-white font-semibold text-sm">Live Tracking</h3>
-                <span class="text-xs text-cyan-400">● LIVE</span>
+    <div id="map" class="absolute inset-0"></div>
+    
+    <div class="absolute bottom-6 left-4 right-4 md:bottom-auto md:top-24 md:left-auto md:right-6 md:w-80 z-[1000] glass-panel rounded-xl p-4 md:p-5 shadow-2xl fade-in">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-white font-semibold text-sm md:text-base">Live Tracking</h3>
+            <span class="text-xs font-bold text-cyan-400 tracking-wider">● LIVE</span>
+        </div>
+        <div class="space-y-3">
+            <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-400"><i class="fa-regular fa-clock mr-2"></i>Last Update</span>
+                <span class="text-white font-mono bg-slate-800/50 px-2 py-1 rounded" id="lastUpdate">--:--:--</span>
             </div>
-            <div class="space-y-3">
-                <div class="flex items-center justify-between text-sm">
-                    <span class="text-slate-400">Last Update</span>
-                    <span class="text-white font-mono" id="lastUpdate">--:--:--</span>
-                </div>
-                <div class="flex items-center justify-between text-sm">
-                    <span class="text-slate-400">Accuracy</span>
-                    <span class="text-green-400 font-mono" id="accuracy">-- m</span>
-                </div>
-                <div class="flex items-center justify-between text-sm">
-                    <span class="text-slate-400">Speed</span>
-                    <span class="text-cyan-400 font-mono" id="speed">-- km/h</span>
-                </div>
+            <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-400"><i class="fa-solid fa-crosshairs mr-2"></i>Accuracy</span>
+                <span class="text-green-400 font-mono bg-green-500/10 px-2 py-1 rounded" id="accuracy">-- m</span>
             </div>
-            <div class="mt-4 pt-3 border-t border-slate-700">
-                <div class="text-xs text-slate-500">
-                    <i class="fa-solid fa-shield-halved mr-1"></i>
-                    Encrypted Connection
-                </div>
+            <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-400"><i class="fa-solid fa-gauge-high mr-2"></i>Speed</span>
+                <span class="text-cyan-400 font-mono bg-cyan-500/10 px-2 py-1 rounded" id="speed">-- km/h</span>
             </div>
         </div>
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-4 right-4 glass-panel px-6 py-4 rounded-xl shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-[10000]">
-        <div class="flex items-center gap-3">
-            <i class="fa-solid fa-circle-check text-green-400"></i>
-            <span class="text-white text-sm" id="toastMessage">Action completed</span>
-        </div>
+    <div id="toast" class="fixed bottom-24 md:bottom-6 right-4 md:right-6 glass-panel px-4 py-3 rounded-lg shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-[10000] flex items-center gap-3">
+        <i class="fa-solid fa-circle-check text-green-400"></i>
+        <span class="text-white text-sm" id="toastMessage">Action completed</span>
     </div>
 
     <script>
@@ -231,39 +160,42 @@
         }
 
         // ==========================================
-        // 2. MAP CONFIGURATION
+        // 2. PREMIUM MAP CONFIGURATION (Google Maps)
         // ==========================================
-        const cleanMapStyle = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            maxZoom: 20,
-            attribution: '&copy; CARTO'
+        // Google Streets View
+        const googleStreets = L.tileLayer('http://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}', {
+            maxZoom: 22,
+            attribution: '&copy; Google Maps'
         });
 
-        const satelliteStyle = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Tiles &copy; Esri'
+        // Google Hybrid (Satellite + Streets)
+        const googleHybrid = L.tileLayer('http://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}', {
+            maxZoom: 22,
+            attribution: '&copy; Google Maps'
         });
 
+        // Dark Mode 
         const darkMapStyle = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             maxZoom: 20,
             attribution: '&copy; CARTO'
         });
 
         const map = L.map('map', {
-            center: [4.2105, 101.9758],
+            center: [4.2105, 101.9758], // Centers on Malaysia
             zoom: 6,
-            layers: [cleanMapStyle],
+            layers: [googleStreets], // Default view
             zoomControl: false,
             attributionControl: false
         });
 
-        L.control.zoom({
-            position: 'bottomright'
-        }).addTo(map);
+        // Move zoom controls to the top right so they don't block the mobile panel
+        L.control.zoom({ position: 'topright' }).addTo(map);
 
         L.control.layers({
-            "🗺️ Standard": cleanMapStyle,
-            "🌍 Satellite": satelliteStyle,
+            "🗺️ Google Streets": googleStreets,
+            "🌍 Google Satellite": googleHybrid,
             "🌑 Dark Mode": darkMapStyle
-        }).addTo(map);
+        }, null, { position: 'topright' }).addTo(map);
 
         // ==========================================
         // 3. SOCKET CONNECTION & TRACKING
@@ -277,7 +209,6 @@
         });
 
         const deviceMarkers = {};
-        const deviceInfo = {};
 
         // Connection Status
         socket.on('connect', () => {
@@ -292,20 +223,13 @@
             showToast('Connection lost', 'error');
         });
 
-        socket.on('connect_error', (error) => {
-            document.getElementById('connectionDot').classList.replace('bg-green-500', 'bg-red-500');
-            document.getElementById('connectionText').textContent = 'Error';
-            showToast('Connection error', 'error');
-        });
-
-// Update Map Pin
+        // Update Map Pin
         function updateMapPin(deviceId, lat, lng, accuracy = 0, speed = 0) {
             const now = new Date();
             document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
-            document.getElementById('accuracy').textContent = accuracy > 0 ? `${accuracy} m` : '-- m';
-            document.getElementById('speed').textContent = speed > 0 ? `${speed} km/h` : '-- km/h';
+            document.getElementById('accuracy').textContent = accuracy > 0 ? `${accuracy.toFixed(1)} m` : '-- m';
+            document.getElementById('speed').textContent = speed > 0 ? `${speed.toFixed(1)} km/h` : '-- km/h';
 
-            // 1. Check if marker exists, if not, create it FIRST
             if (deviceMarkers[deviceId]) {
                 deviceMarkers[deviceId].setLatLng([lat, lng]);
             } else {
@@ -319,18 +243,15 @@
                     .addTo(map)
                     .bindPopup(`
                         <div class="text-center p-2">
-                            <h3 class="font-bold text-white mb-1">Device: ${deviceId}</h3>
-                            <p class="text-xs text-slate-400">Lat: ${lat.toFixed(6)}</p>
-                            <p class="text-xs text-slate-400">Lng: ${lng.toFixed(6)}</p>
-                            <p class="text-xs text-cyan-400 mt-1">● Live Tracking</p>
+                            <h3 class="font-bold text-slate-800 mb-1">Device: ${deviceId.substring(0,6)}...</h3>
+                            <p class="text-xs text-slate-500">Lat: ${lat.toFixed(6)}</p>
+                            <p class="text-xs text-slate-500">Lng: ${lng.toFixed(6)}</p>
                         </div>
                     `);
             }
             
-            // 2. NOW update the counter so the math is correct! (Fixes 0 Active Devices)
             document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
-            
-            map.setView([lat, lng], 17);
+            map.setView([lat, lng], 18); // Zoom in tightly to the Google Maps street level
         }
 
         // Fetch History
@@ -339,8 +260,6 @@
             .then(data => {
                 if (data.length > 0) {
                     const lastPoint = data[data.length - 1];
-                    // 3. Just center the camera on the last known location. 
-                    // Do NOT create a "fake" live pin from past history. (Fixes Ghost Pin)
                     map.setView([lastPoint.latitude, lastPoint.longitude], 16);
                 }
             })
@@ -348,23 +267,16 @@
 
         // Real-time Updates
         socket.on('update-map', (data) => {
-            updateMapPin(
-                data.id, 
-                data.latitude, 
-                data.longitude,
-                data.accuracy || 0,
-                data.speed || 0
-            );
+            updateMapPin(data.id, data.latitude, data.longitude, data.accuracy, data.speed);
         });
 
-        // 4. THE MISSING DISCONNECT LISTENER (Removes pin when phone stops tracking)
+        // Disconnect Listener
         socket.on('device-disconnected', (deviceId) => {
             if (deviceMarkers[deviceId]) {
                 map.removeLayer(deviceMarkers[deviceId]);
                 delete deviceMarkers[deviceId];
                 
                 document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
-                
                 document.getElementById('lastUpdate').textContent = "--:--:--";
                 document.getElementById('accuracy').textContent = "-- m";
                 document.getElementById('speed').textContent = "-- km/h";
@@ -396,14 +308,10 @@
                     showToast('Access Denied: Incorrect Password', 'error');
                 }
             })
-            .catch(err => {
-                showToast('Error wiping database', 'error');
-            });
+            .catch(err => showToast('Error wiping database', 'error'));
         });
 
         // ==========================================
-        // 5. UTILITY FUNCTIONS
-         // ==========================================
         // 5. UTILITY FUNCTIONS
         // ==========================================
         function showToast(message, type) {
@@ -413,18 +321,15 @@
             
             toastMsg.textContent = message;
             
-            // Change icon based on success or error
             if (type === 'error') {
                 icon.className = 'fa-solid fa-circle-xmark text-red-400';
             } else {
                 icon.className = 'fa-solid fa-circle-check text-green-400';
             }
 
-            // Slide toast up and fade in
             toast.classList.remove('opacity-0', 'translate-y-20');
             toast.classList.add('opacity-100', 'translate-y-0');
 
-            // Hide after 3 seconds
             setTimeout(() => {
                 toast.classList.remove('opacity-100', 'translate-y-0');
                 toast.classList.add('opacity-0', 'translate-y-20');

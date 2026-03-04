@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoTrack - Emitter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+</head>
+<body class="bg-slate-900 h-screen flex flex-col items-center justify-center text-white font-sans">
+
+    <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full mx-4 border border-slate-700">
+        <div class="w-16 h-16 bg-indigo-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <span class="text-3xl">📡</span>
+        </div>
+        <h1 class="text-2xl font-bold mb-2">Device Emitter</h1>
+        <p class="text-slate-400 mb-8 text-sm">Keep this screen open on your phone to transmit your live location to the dashboard.</p>
+        
+        <button id="startBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-full w-full shadow-lg shadow-green-500/30 transition-all text-lg">
+            Start Tracking
+        </button>
+
+        <p id="status" class="mt-6 text-sm font-mono text-cyan-400"></p>
+    </div>
+
+    <script>
+        // Connect automatically to your live Render server!
+        const socket = io(); 
+        const statusText = document.getElementById('status');
+        let watchId = null;
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            const btn = document.getElementById('startBtn');
+
+            if (watchId) {
+                // Stop Tracking
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+                btn.textContent = "Start Tracking";
+                btn.classList.replace('bg-red-500', 'bg-green-500');
+                btn.classList.replace('hover:bg-red-600', 'hover:bg-green-600');
+                btn.classList.replace('shadow-red-500/30', 'shadow-green-500/30');
+                statusText.textContent = "Tracking stopped.";
+            } else {
+                // Start Tracking
+                if ("geolocation" in navigator) {
+                    btn.textContent = "Stop Tracking";
+                    btn.classList.replace('bg-green-500', 'bg-red-500');
+                    btn.classList.replace('hover:bg-green-600', 'hover:bg-red-600');
+                    btn.classList.replace('shadow-green-500/30', 'shadow-red-500/30');
+                    statusText.textContent = "Locating satellites...";
+
+                    // Read the phone's GPS
+                    watchId = navigator.geolocation.watchPosition(
+                        (position) => {
+                            const lat = position.coords.latitude;
+                            const lng = position.coords.longitude;
+                            
+                            statusText.textContent = `Live: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+                            
+                            // Beam it to the server!
+                            socket.emit('send-location', {
+                                latitude: lat,
+                                longitude: lng
+                            });
+                        },
+                        (error) => {
+                            statusText.textContent = "Error: Please enable GPS permissions.";
+                        },
+                        { enableHighAccuracy: true, maximumAge: 0 } // Demand highly accurate GPS data
+                    );
+                } else {
+                    statusText.textContent = "GPS not supported on this device.";
+                }
+            }
+        });
+    </script>
+</body>
+</html>

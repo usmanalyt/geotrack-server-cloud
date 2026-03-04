@@ -24,7 +24,7 @@
     </div>
 
     <script>
-        // Connect automatically to your live Render server!
+       // Connect to your live Render server!
         const socket = io(); 
         const statusText = document.getElementById('status');
         let watchId = null;
@@ -33,16 +33,27 @@
             const btn = document.getElementById('startBtn');
 
             if (watchId) {
-                // Stop Tracking
+                // =========================================
+                // 🛑 STOP TRACKING LOGIC
+                // =========================================
                 navigator.geolocation.clearWatch(watchId);
                 watchId = null;
+                
+                // 🎯 THE FIX: Explicitly sever the connection so the dashboard knows!
+                socket.disconnect(); 
+                
                 btn.textContent = "Start Tracking";
                 btn.classList.replace('bg-red-500', 'bg-green-500');
                 btn.classList.replace('hover:bg-red-600', 'hover:bg-green-600');
                 btn.classList.replace('shadow-red-500/30', 'shadow-green-500/30');
                 statusText.textContent = "Tracking stopped.";
             } else {
-                // Start Tracking
+                // =========================================
+                // 🟢 START TRACKING LOGIC
+                // =========================================
+                // 🎯 THE FIX: Reconnect the socket before we start sending data again
+                socket.connect(); 
+
                 if ("geolocation" in navigator) {
                     btn.textContent = "Stop Tracking";
                     btn.classList.replace('bg-green-500', 'bg-red-500');
@@ -67,7 +78,7 @@
                         (error) => {
                             statusText.textContent = "Error: Please enable GPS permissions.";
                         },
-                        { enableHighAccuracy: true, maximumAge: 0 } // Demand highly accurate GPS data
+                        { enableHighAccuracy: true, maximumAge: 0 } 
                     );
                 } else {
                     statusText.textContent = "GPS not supported on this device.";

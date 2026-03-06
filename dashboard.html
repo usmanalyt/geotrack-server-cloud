@@ -39,7 +39,6 @@
             z-index: 0;
         }
 
-        /* Shift the bottom-right controls up slightly so they don't hide behind mobile browsers */
         .leaflet-control-container .leaflet-bottom { bottom: 20px; }
 
         .status-dot {
@@ -56,12 +55,21 @@
             50% { opacity: 0.5; }
         }
 
-        .custom-marker {
-            background: #06b6d4;
-            border: 3px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 15px rgba(6, 182, 212, 0.8), 0 0 30px rgba(6, 182, 212, 0.4);
-            transition: all 0.3s ease;
+        /* 🎯 NEW: This makes the marker glide smoothly instead of teleporting */
+        .leaflet-marker-icon {
+            transition: transform 0.5s linear !important;
+        }
+
+        /* 🎯 NEW: Google Maps Style Navigation Arrow */
+        .nav-arrow {
+            color: #06b6d4;
+            font-size: 28px;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+            /* The FontAwesome arrow points top-right, so we rotate it to point up */
+            transform: rotate(-45deg); 
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .fade-in {
@@ -102,7 +110,6 @@
                 <button id="togglePanelBtn" class="bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-400 border border-indigo-500/30 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-all text-sm">
                     <i class="fa-solid fa-chart-simple md:mr-2"></i><span class="hidden md:inline"> Details</span>
                 </button>
-
                 <button id="wipeBtn" class="bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-all text-sm">
                     <i class="fa-solid fa-trash-can md:mr-2"></i><span class="hidden md:inline"> Wipe</span>
                 </button>
@@ -142,9 +149,6 @@
     </div>
 
     <script>
-        // ==========================================
-        // 1. AUTHENTICATION & UI TOGGLES
-        // ==========================================
         function checkAuth() {
             if (localStorage.getItem('geotrack_auth') !== 'true') window.location.href = 'index.html';
         }
@@ -155,15 +159,11 @@
             window.location.href = 'index.html';
         }
 
-        // 🎯 NEW: Toggle the details panel when the button is clicked
         document.getElementById('togglePanelBtn').addEventListener('click', () => {
             const panel = document.getElementById('infoPanel');
             panel.classList.toggle('hidden');
         });
 
-        // ==========================================
-        // 2. PREMIUM MAP CONFIGURATION
-        // ==========================================
         const googleStreets = L.tileLayer('http://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}', { maxZoom: 22 });
         const googleHybrid = L.tileLayer('http://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}', { maxZoom: 22 });
         const darkMapStyle = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 });
@@ -176,7 +176,6 @@
             attributionControl: false
         });
 
-        // 🎯 NEW: Move zoom and layer controls OUT of the way to the Bottom Right
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
         L.control.layers({
@@ -185,9 +184,6 @@
             "🌑 Dark Mode": darkMapStyle
         }, null, { position: 'bottomright' }).addTo(map);
 
-        // ==========================================
-        // 3. SOCKET CONNECTION, TRACKING & TRAILS
-        // ==========================================
         const SERVER_URL = 'https://geotrack-server-cloud-1.onrender.com';
         const socket = io(SERVER_URL, {
             transports: ['websocket', 'polling'],
@@ -195,7 +191,6 @@
         });
 
         const deviceMarkers = {};
-        const deviceTrails = {};
 
         socket.on('connect', () => {
             document.getElementById('connectionDot').classList.replace('bg-red-500', 'bg-green-500');
@@ -215,32 +210,30 @@
             document.getElementById('accuracy').textContent = accuracy > 0 ? `${accuracy.toFixed(1)} m` : '-- m';
             document.getElementById('speed').textContent = speed > 0 ? `${speed.toFixed(1)} km/h` : '-- km/h';
 
-            // 1. Pin Update
             if (deviceMarkers[deviceId]) {
                 deviceMarkers[deviceId].setLatLng([lat, lng]);
             } else {
-                const customIcon = L.divIcon({ className: 'custom-marker', iconSize: [20, 20], iconAnchor: [10, 10] });
+                // 🎯 NEW: Navigation Arrow Icon
+                const customIcon = L.divIcon({ 
+                    className: 'bg-transparent border-0', 
+                    html: '<div class="nav-arrow"><i class="fa-solid fa-location-arrow"></i></div>',
+                    iconSize: [30, 30], 
+                    iconAnchor: [15, 15] 
+                });
                 deviceMarkers[deviceId] = L.marker([lat, lng], { icon: customIcon }).addTo(map)
                     .bindPopup(`<div class="text-center p-2"><h3 class="font-bold text-slate-800 mb-1">Device: ${deviceId.substring(0,6)}</h3></div>`);
             }
             
-            // 2. Trail Update
-            if (deviceTrails[deviceId]) {
-                deviceTrails[deviceId].addLatLng([lat, lng]);
-            } else {
-                deviceTrails[deviceId] = L.polyline([[lat, lng]], {
-                    color: '#06b6d4', weight: 4, opacity: 0.8, lineJoin: 'round', dashArray: '10, 10'
-                }).addTo(map);
-            }
-            
             document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
-            map.setView([lat, lng], 18); 
+            
+            // 🎯 NEW: Smoothly pan the camera to follow the device
+            map.panTo([lat, lng]); 
         }
 
         fetch(`${SERVER_URL}/api/history`)
             .then(res => res.json())
             .then(data => {
-                if (data.length > 0) map.setView([data[data.length - 1].latitude, data[data.length - 1].longitude], 16);
+                if (data.length > 0) map.panTo([data[data.length - 1].latitude, data[data.length - 1].longitude]);
             })
             .catch(err => console.error('Error fetching history:', err));
 
@@ -251,11 +244,6 @@
                 map.removeLayer(deviceMarkers[deviceId]);
                 delete deviceMarkers[deviceId];
                 
-                if (deviceTrails[deviceId]) {
-                    map.removeLayer(deviceTrails[deviceId]);
-                    delete deviceTrails[deviceId];
-                }
-                
                 document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
                 document.getElementById('lastUpdate').textContent = "--:--:--";
                 document.getElementById('accuracy').textContent = "-- m";
@@ -264,9 +252,6 @@
             }
         });
 
-        // ==========================================
-        // 4. WIPE MAP LOGIC
-        // ==========================================
         document.getElementById('wipeBtn').addEventListener('click', () => {
             const pass = prompt('Enter Admin Password to wipe the database:');
             if (!pass) return;
@@ -276,7 +261,6 @@
                 if (res.ok) {
                     showToast('Database wiped successfully!', 'success');
                     for (let id in deviceMarkers) { map.removeLayer(deviceMarkers[id]); delete deviceMarkers[id]; }
-                    for (let id in deviceTrails) { map.removeLayer(deviceTrails[id]); delete deviceTrails[id]; }
                     document.getElementById('deviceCount').textContent = '0';
                 } else {
                     showToast('Access Denied: Incorrect Password', 'error');

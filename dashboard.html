@@ -55,17 +55,14 @@
             50% { opacity: 0.5; }
         }
 
-        /* 🎯 NEW: This makes the marker glide smoothly instead of teleporting */
         .leaflet-marker-icon {
             transition: transform 0.5s linear !important;
         }
 
-        /* 🎯 NEW: Google Maps Style Navigation Arrow */
         .nav-arrow {
             color: #06b6d4;
             font-size: 28px;
             filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
-            /* The FontAwesome arrow points top-right, so we rotate it to point up */
             transform: rotate(-45deg); 
             display: flex;
             align-items: center;
@@ -133,12 +130,12 @@
                 <span class="text-white font-mono bg-slate-800/50 px-2 py-1 rounded" id="lastUpdate">--:--:--</span>
             </div>
             <div class="flex items-center justify-between text-sm">
-                <span class="text-slate-400"><i class="fa-solid fa-crosshairs mr-2"></i>Accuracy</span>
-                <span class="text-green-400 font-mono bg-green-500/10 px-2 py-1 rounded" id="accuracy">-- m</span>
+                <span class="text-slate-400"><i class="fa-solid fa-map-location-dot mr-2"></i>Location</span>
+                <span class="text-emerald-400 font-mono bg-emerald-500/10 px-2 py-1 rounded max-w-[140px] truncate" id="locationName" title="Waiting for GPS...">--</span>
             </div>
             <div class="flex items-center justify-between text-sm">
-                <span class="text-slate-400"><i class="fa-solid fa-gauge-high mr-2"></i>Speed</span>
-                <span class="text-cyan-400 font-mono bg-cyan-500/10 px-2 py-1 rounded" id="speed">-- km/h</span>
+                <span class="text-slate-400"><i class="fa-solid fa-route mr-2"></i>Distance</span>
+                <span class="text-indigo-400 font-mono bg-indigo-500/10 px-2 py-1 rounded" id="distance">--</span>
             </div>
         </div>
     </div>
@@ -184,6 +181,18 @@
             "🌑 Dark Mode": darkMapStyle
         }, null, { position: 'bottomright' }).addTo(map);
 
+        // ==========================================
+        // 🎯 NEW: TRACK ADMIN LOCATION FOR DISTANCE
+        // ==========================================
+        let adminLatLng = null;
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition((pos) => {
+                adminLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+            }, (err) => {
+                document.getElementById('distance').textContent = 'Location Blocked';
+            }, { enableHighAccuracy: true });
+        }
+
         const SERVER_URL = 'https://geotrack-server-cloud-1.onrender.com';
         const socket = io(SERVER_URL, {
             transports: ['websocket', 'polling'],
@@ -204,16 +213,24 @@
             showToast('Connection lost', 'error');
         });
 
-        function updateMapPin(deviceId, lat, lng, accuracy = 0, speed = 0) {
+        function updateMapPin(deviceId, lat, lng) {
             const now = new Date();
             document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
-            document.getElementById('accuracy').textContent = accuracy > 0 ? `${accuracy.toFixed(1)} m` : '-- m';
-            document.getElementById('speed').textContent = speed > 0 ? `${speed.toFixed(1)} km/h` : '-- km/h';
 
+            // 1. Calculate Distance to Tracker
+            const currentLatLng = L.latLng(lat, lng);
+            if (adminLatLng) {
+                const distMeters = adminLatLng.distanceTo(currentLatLng);
+                const distText = distMeters > 1000 ? (distMeters / 1000).toFixed(2) + ' km' : Math.round(distMeters) + ' m';
+                document.getElementById('distance').textContent = distText;
+            } else {
+                document.getElementById('distance').textContent = 'Waiting...';
+            }
+
+            // 2. Move Marker
             if (deviceMarkers[deviceId]) {
                 deviceMarkers[deviceId].setLatLng([lat, lng]);
             } else {
-                // 🎯 NEW: Navigation Arrow Icon
                 const customIcon = L.divIcon({ 
                     className: 'bg-transparent border-0', 
                     html: '<div class="nav-arrow"><i class="fa-solid fa-location-arrow"></i></div>',
@@ -222,11 +239,28 @@
                 });
                 deviceMarkers[deviceId] = L.marker([lat, lng], { icon: customIcon }).addTo(map)
                     .bindPopup(`<div class="text-center p-2"><h3 class="font-bold text-slate-800 mb-1">Device: ${deviceId.substring(0,6)}</h3></div>`);
+                
+                // Initialize a fake "last geocoded" position so it triggers immediately
+                deviceMarkers[deviceId].lastGeocode = L.latLng(0, 0);
+            }
+
+            // 3. Reverse Geocoding (Convert Coordinates to Street Name)
+            // We only query the API if the phone moves more than 50 meters so they don't block us!
+            const marker = deviceMarkers[deviceId];
+            if (marker.lastGeocode.distanceTo(currentLatLng) > 50) {
+                marker.lastGeocode = currentLatLng;
+                fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        // Grab the most relevant short name (road, suburb, or city)
+                        const placeName = data.name || data.address?.road || data.address?.suburb || data.address?.city || "Unknown Area";
+                        const locElement = document.getElementById('locationName');
+                        locElement.textContent = placeName;
+                        locElement.title = data.display_name; // Show full address if you hover your mouse over it
+                    }).catch(err => console.log("Geocoding failed"));
             }
             
             document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
-            
-            // 🎯 NEW: Smoothly pan the camera to follow the device
             map.panTo([lat, lng]); 
         }
 
@@ -237,7 +271,7 @@
             })
             .catch(err => console.error('Error fetching history:', err));
 
-        socket.on('update-map', (data) => updateMapPin(data.id, data.latitude, data.longitude, data.accuracy, data.speed));
+        socket.on('update-map', (data) => updateMapPin(data.id, data.latitude, data.longitude));
 
         socket.on('device-disconnected', (deviceId) => {
             if (deviceMarkers[deviceId]) {
@@ -246,8 +280,8 @@
                 
                 document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
                 document.getElementById('lastUpdate').textContent = "--:--:--";
-                document.getElementById('accuracy').textContent = "-- m";
-                document.getElementById('speed').textContent = "-- km/h";
+                document.getElementById('locationName').textContent = "--";
+                document.getElementById('distance').textContent = "--";
                 showToast('Tracker disconnected', 'error');
             }
         });

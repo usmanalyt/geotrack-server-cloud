@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>C-Track | Live Dashboard</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -20,6 +21,7 @@
             padding: 0;
         }
 
+        /* UI Panel Styling */
         .glass-panel {
             background: rgba(30, 41, 59, 0.85);
             backdrop-filter: blur(20px);
@@ -39,8 +41,12 @@
             z-index: 0;
         }
 
-        .leaflet-control-container .leaflet-bottom { bottom: 20px; }
+        /* Prevent Leaflet controls from hiding under mobile browser bars */
+        .leaflet-control-container .leaflet-bottom { 
+            bottom: 20px; 
+        }
 
+        /* Animations */
         .status-dot {
             width: 8px;
             height: 8px;
@@ -55,12 +61,20 @@
             50% { opacity: 0.5; }
         }
 
-        /* Smoothly pan the marker across the map */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* Dynamic Map Marker */
         .leaflet-marker-icon {
             transition: transform 0.5s linear !important;
         }
 
-        /* 🎯 NEW: Removed the static rotation so the Javascript can spin it dynamically! */
         .nav-arrow {
             color: #06b6d4;
             font-size: 28px;
@@ -68,15 +82,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.6s ease-out; /* Makes the spinning look smooth */
-        }
-
-        .fade-in {
-            animation: fadeIn 0.3s ease-in-out;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
+            transition: transform 0.6s ease-out; 
         }
     </style>
 </head>
@@ -84,13 +90,13 @@
 
     <header class="glass-panel z-[1000] absolute top-0 left-0 right-0 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center shadow-lg">
         <div class="flex items-center gap-3 md:gap-4">
-            <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg">
+            <div class="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
                 <i class="fa-solid fa-location-crosshairs text-white text-sm md:text-base"></i>
             </div>
             <div>
                 <h1 class="text-lg md:text-xl font-bold text-white tracking-tight leading-tight">
-    C-<span class="text-cyan-400">Track</span>
-            </h1>
+                    C-<span class="text-cyan-400">Track</span>
+                </h1>
                 <div class="flex items-center gap-2 text-[10px] md:text-xs">
                     <div class="status-dot" id="connectionDot"></div>
                     <span class="text-slate-400" id="connectionText">Connecting...</span>
@@ -112,7 +118,7 @@
                 <button id="wipeBtn" class="bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-all text-sm">
                     <i class="fa-solid fa-trash-can md:mr-2"></i><span class="hidden md:inline"> Wipe</span>
                 </button>
-                <button onclick="logout()" class="bg-slate-700/50 hover:bg-slate-600/50 text-white border border-slate-600 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-all text-sm">
+                <button id="logoutBtn" class="bg-slate-700/50 hover:bg-slate-600/50 text-white border border-slate-600 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-all text-sm">
                     <i class="fa-solid fa-right-from-bracket md:mr-2"></i><span class="hidden md:inline"> Logout</span>
                 </button>
             </div>
@@ -148,116 +154,138 @@
     </div>
 
     <script>
-        function checkAuth() {
-            if (localStorage.getItem('geotrack_auth') !== 'true') window.location.href = 'index.html';
-        }
-        checkAuth();
-
-        function logout() {
-            localStorage.removeItem('geotrack_auth');
+        // --- Auth Check ---
+        if (localStorage.getItem('geotrack_auth') !== 'true') {
             window.location.href = 'index.html';
         }
 
-        document.getElementById('togglePanelBtn').addEventListener('click', () => {
-            const panel = document.getElementById('infoPanel');
-            panel.classList.toggle('hidden');
+        // --- Cache DOM Elements ---
+        const ui = {
+            panelToggleBtn: document.getElementById('togglePanelBtn'),
+            wipeBtn: document.getElementById('wipeBtn'),
+            logoutBtn: document.getElementById('logoutBtn'),
+            infoPanel: document.getElementById('infoPanel'),
+            connDot: document.getElementById('connectionDot'),
+            connText: document.getElementById('connectionText'),
+            deviceCount: document.getElementById('deviceCount'),
+            lastUpdate: document.getElementById('lastUpdate'),
+            locationName: document.getElementById('locationName'),
+            distance: document.getElementById('distance'),
+            toast: document.getElementById('toast'),
+            toastMsg: document.getElementById('toastMessage')
+        };
+
+        // --- Event Listeners ---
+        ui.logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('geotrack_auth');
+            window.location.href = 'index.html';
         });
 
-        const googleStreets = L.tileLayer('http://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}', { maxZoom: 22 });
-        const googleHybrid = L.tileLayer('http://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}', { maxZoom: 22 });
-        const darkMapStyle = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 });
+        ui.panelToggleBtn.addEventListener('click', () => {
+            ui.infoPanel.classList.toggle('hidden');
+        });
+
+        // --- Map Initialization ---
+        const mapLayers = {
+            streets: L.tileLayer('http://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}', { maxZoom: 22 }),
+            satellite: L.tileLayer('http://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}', { maxZoom: 22 }),
+            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 })
+        };
 
         const map = L.map('map', {
-            center: [4.2105, 101.9758],
+            center: [4.2105, 101.9758], // Initial center (Malaysia)
             zoom: 6,
-            layers: [googleStreets], 
+            layers: [mapLayers.streets], 
             zoomControl: false,
             attributionControl: false
         });
 
         L.control.zoom({ position: 'bottomright' }).addTo(map);
-
         L.control.layers({
-            "🗺️ Google Streets": googleStreets,
-            "🌍 Google Satellite": googleHybrid,
-            "🌑 Dark Mode": darkMapStyle
+            "🗺️ Google Streets": mapLayers.streets,
+            "🌍 Google Satellite": mapLayers.satellite,
+            "🌑 Dark Mode": mapLayers.dark
         }, null, { position: 'bottomright' }).addTo(map);
 
-        // Track Admin Location for Distance Math
-        let adminLatLng = null;
-        if ("geolocation" in navigator) {
-            navigator.geolocation.watchPosition((pos) => {
-                adminLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
-            }, (err) => {
-                document.getElementById('distance').textContent = 'Blocked';
-            }, { enableHighAccuracy: true });
-        }
-
-        // 🎯 NEW: The Mathematics to calculate exact Compass Heading (Bearing)
-        function calculateBearing(startLat, startLng, destLat, destLng) {
-            const toRad = (deg) => (deg * Math.PI) / 180;
-            const toDeg = (rad) => (rad * 180) / Math.PI;
-
-            const startLatRad = toRad(startLat);
-            const startLngRad = toRad(startLng);
-            const destLatRad = toRad(destLat);
-            const destLngRad = toRad(destLng);
-
-            const y = Math.sin(destLngRad - startLngRad) * Math.cos(destLatRad);
-            const x = Math.cos(startLatRad) * Math.sin(destLatRad) -
-                      Math.sin(startLatRad) * Math.cos(destLatRad) * Math.cos(destLngRad - startLngRad);
-
-            const brng = toDeg(Math.atan2(y, x));
-            return (brng + 360) % 360; // Returns an angle between 0 and 360 degrees
-        }
-
+        // --- State Variables ---
         const SERVER_URL = 'https://geotrack-server-cloud-1.onrender.com';
-        const socket = io(SERVER_URL, {
-            transports: ['websocket', 'polling'],
-            reconnection: true
-        });
-
+        const socket = io(SERVER_URL, { transports: ['websocket', 'polling'], reconnection: true });
         const deviceMarkers = {};
+        let adminLatLng = null;
 
+        // Track local admin position to calculate distance to target
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition(
+                (pos) => adminLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude), 
+                (err) => ui.distance.textContent = 'Blocked', 
+                { enableHighAccuracy: true }
+            );
+        }
+
+        // --- Utility Functions ---
+        const showToast = (message, type = 'success') => {
+            ui.toastMsg.textContent = message;
+            const icon = ui.toast.querySelector('i');
+            icon.className = type === 'error' ? 'fa-solid fa-circle-xmark text-red-400' : 'fa-solid fa-circle-check text-green-400';
+            
+            ui.toast.classList.remove('opacity-0', 'translate-y-20');
+            ui.toast.classList.add('opacity-100', 'translate-y-0');
+            
+            setTimeout(() => {
+                ui.toast.classList.remove('opacity-100', 'translate-y-0');
+                ui.toast.classList.add('opacity-0', 'translate-y-20');
+            }, 3000);
+        };
+
+        // Calculates compass bearing between two coordinates
+        const calculateBearing = (startLat, startLng, destLat, destLng) => {
+            const toRad = deg => (deg * Math.PI) / 180;
+            const toDeg = rad => (rad * 180) / Math.PI;
+
+            const y = Math.sin(toRad(destLng) - toRad(startLng)) * Math.cos(toRad(destLat));
+            const x = Math.cos(toRad(startLat)) * Math.sin(toRad(destLat)) -
+                      Math.sin(toRad(startLat)) * Math.cos(toRad(destLat)) * Math.cos(toRad(destLng) - toRad(startLng));
+
+            return (toDeg(Math.atan2(y, x)) + 360) % 360; 
+        };
+
+        // --- Socket & Core Logic ---
         socket.on('connect', () => {
-            document.getElementById('connectionDot').classList.replace('bg-red-500', 'bg-green-500');
-            document.getElementById('connectionText').textContent = 'Connected';
+            ui.connDot.classList.replace('bg-red-500', 'bg-green-500');
+            ui.connText.textContent = 'Connected';
             showToast('Connected to server', 'success');
         });
 
         socket.on('disconnect', () => {
-            document.getElementById('connectionDot').classList.replace('bg-green-500', 'bg-red-500');
-            document.getElementById('connectionText').textContent = 'Disconnected';
+            ui.connDot.classList.replace('bg-green-500', 'bg-red-500');
+            ui.connText.textContent = 'Disconnected';
             showToast('Connection lost', 'error');
         });
 
-        function updateMapPin(deviceId, lat, lng) {
-            const now = new Date();
-            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
-
+        const updateMapPin = (deviceId, lat, lng) => {
+            ui.lastUpdate.textContent = new Date().toLocaleTimeString();
             const currentLatLng = L.latLng(lat, lng);
             
+            // Calculate distance if admin location is known
             if (adminLatLng) {
                 const distMeters = adminLatLng.distanceTo(currentLatLng);
-                const distText = distMeters > 1000 ? (distMeters / 1000).toFixed(2) + ' km' : Math.round(distMeters) + ' m';
-                document.getElementById('distance').textContent = distText;
+                ui.distance.textContent = distMeters > 1000 
+                    ? (distMeters / 1000).toFixed(2) + ' km' 
+                    : Math.round(distMeters) + ' m';
             }
 
-            // 🎯 NEW: Rotate the Marker based on movement!
+            // Handle Marker Position and Rotation
             if (deviceMarkers[deviceId]) {
-                const oldLatLng = deviceMarkers[deviceId].getLatLng();
+                const marker = deviceMarkers[deviceId];
+                const oldLatLng = marker.getLatLng();
                 const distMoved = oldLatLng.distanceTo(currentLatLng);
+                let currentAngle = marker.options.bearing || 0;
                 
-                // Retrieve the last known angle, default to 0
-                let currentAngle = deviceMarkers[deviceId].options.bearing || 0;
-                
-                // Only spin the arrow if they actually moved a few meters (prevents jitter spinning while standing still)
+                // Update bearing only if moved significantly to prevent jitter
                 if (distMoved > 2) {
                     currentAngle = calculateBearing(oldLatLng.lat, oldLatLng.lng, lat, lng);
                 }
 
-                // Create the updated icon with the new rotation
-                // (We subtract 45 degrees because the FontAwesome icon natively points to the top-right)
                 const updatedIcon = L.divIcon({ 
                     className: 'bg-transparent border-0', 
                     html: `<div class="nav-arrow" style="transform: rotate(${currentAngle - 45}deg);"><i class="fa-solid fa-location-arrow"></i></div>`,
@@ -265,51 +293,61 @@
                     iconAnchor: [15, 15] 
                 });
 
-                deviceMarkers[deviceId].setIcon(updatedIcon);
-                deviceMarkers[deviceId].setLatLng([lat, lng]);
-                deviceMarkers[deviceId].options.bearing = currentAngle; // Save for next time
+                marker.setIcon(updatedIcon);
+                marker.setLatLng([lat, lng]);
+                marker.options.bearing = currentAngle;
 
             } else {
-                // If it's a brand new connection, just point it North initially
+                // Initialize new marker pointing North
                 const customIcon = L.divIcon({ 
                     className: 'bg-transparent border-0', 
                     html: `<div class="nav-arrow" style="transform: rotate(-45deg);"><i class="fa-solid fa-location-arrow"></i></div>`,
                     iconSize: [30, 30], 
                     iconAnchor: [15, 15] 
                 });
-                deviceMarkers[deviceId] = L.marker([lat, lng], { icon: customIcon }).addTo(map)
+                
+                deviceMarkers[deviceId] = L.marker([lat, lng], { icon: customIcon })
+                    .addTo(map)
                     .bindPopup(`<div class="text-center p-2"><h3 class="font-bold text-slate-800 mb-1">Device: ${deviceId.substring(0,6)}</h3></div>`);
                 
                 deviceMarkers[deviceId].lastGeocode = L.latLng(0, 0);
                 deviceMarkers[deviceId].options.bearing = 0;
             }
 
-            // 🎯 NEW: Smarter Reverse Geocoding
-            const marker = deviceMarkers[deviceId];
-            if (marker.lastGeocode.distanceTo(currentLatLng) > 50) {
-                marker.lastGeocode = currentLatLng;
+            // Reverse Geocoding (throttled to 50m movements to save API calls)
+            const activeMarker = deviceMarkers[deviceId];
+            if (activeMarker.lastGeocode.distanceTo(currentLatLng) > 50) {
+                activeMarker.lastGeocode = currentLatLng;
+                
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`)
                     .then(res => res.json())
                     .then(data => {
-                        // Much broader net to catch the location name!
-                        const placeName = data.name || data.address?.road || data.address?.neighbourhood || data.address?.suburb || data.address?.village || data.address?.town || data.address?.city || data.address?.county || (data.display_name ? data.display_name.split(',')[0] : "Unnamed Area");
-                        const locElement = document.getElementById('locationName');
-                        locElement.textContent = placeName;
-                        locElement.title = data.display_name; 
-                    }).catch(err => console.log("Geocoding failed"));
+                        const place = data.name || data.address?.road || data.address?.neighbourhood || 
+                                      data.address?.suburb || data.address?.city || 
+                                      (data.display_name ? data.display_name.split(',')[0] : "Unknown Area");
+                        
+                        ui.locationName.textContent = place;
+                        ui.locationName.title = data.display_name || place; 
+                    })
+                    .catch(err => console.warn("Geocoding failed", err));
             }
             
-            document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
+            ui.deviceCount.textContent = Object.keys(deviceMarkers).length;
             map.panTo([lat, lng]); 
-        }
+        };
 
+        // Initialize history on load
         fetch(`${SERVER_URL}/api/history`)
             .then(res => res.json())
             .then(data => {
-                if (data.length > 0) map.panTo([data[data.length - 1].latitude, data[data.length - 1].longitude]);
+                if (data.length > 0) {
+                    const last = data[data.length - 1];
+                    map.panTo([last.latitude, last.longitude]);
+                }
             })
-            .catch(err => console.error('Error fetching history:', err));
+            .catch(err => console.error('History fetch error:', err));
 
+        // Real-time listeners
         socket.on('update-map', (data) => updateMapPin(data.id, data.latitude, data.longitude));
 
         socket.on('device-disconnected', (deviceId) => {
@@ -317,42 +355,35 @@
                 map.removeLayer(deviceMarkers[deviceId]);
                 delete deviceMarkers[deviceId];
                 
-                document.getElementById('deviceCount').textContent = Object.keys(deviceMarkers).length;
-                document.getElementById('lastUpdate').textContent = "--:--:--";
-                document.getElementById('locationName').textContent = "--";
-                document.getElementById('distance').textContent = "--";
+                ui.deviceCount.textContent = Object.keys(deviceMarkers).length;
+                ui.lastUpdate.textContent = "--:--:--";
+                ui.locationName.textContent = "--";
+                ui.distance.textContent = "--";
+                
                 showToast('Tracker disconnected', 'error');
             }
         });
 
-        document.getElementById('wipeBtn').addEventListener('click', () => {
+        // Admin database wipe
+        ui.wipeBtn.addEventListener('click', () => {
             const pass = prompt('Enter Admin Password to wipe the database:');
             if (!pass) return;
 
             fetch(`${SERVER_URL}/api/history`, { method: 'DELETE', headers: { 'x-admin-key': pass } })
-            .then(res => {
-                if (res.ok) {
-                    showToast('Database wiped successfully!', 'success');
-                    for (let id in deviceMarkers) { map.removeLayer(deviceMarkers[id]); delete deviceMarkers[id]; }
-                    document.getElementById('deviceCount').textContent = '0';
-                } else {
-                    showToast('Access Denied: Incorrect Password', 'error');
-                }
-            })
-            .catch(err => showToast('Error wiping database', 'error'));
+                .then(res => {
+                    if (res.ok) {
+                        showToast('Database wiped successfully!');
+                        for (let id in deviceMarkers) { 
+                            map.removeLayer(deviceMarkers[id]); 
+                            delete deviceMarkers[id]; 
+                        }
+                        ui.deviceCount.textContent = '0';
+                    } else {
+                        showToast('Access Denied: Incorrect Password', 'error');
+                    }
+                })
+                .catch(err => showToast('Error wiping database', 'error'));
         });
-
-        function showToast(message, type) {
-            const toast = document.getElementById('toast');
-            toast.querySelector('span').textContent = message;
-            toast.querySelector('i').className = type === 'error' ? 'fa-solid fa-circle-xmark text-red-400' : 'fa-solid fa-circle-check text-green-400';
-            toast.classList.remove('opacity-0', 'translate-y-20');
-            toast.classList.add('opacity-100', 'translate-y-0');
-            setTimeout(() => {
-                toast.classList.remove('opacity-100', 'translate-y-0');
-                toast.classList.add('opacity-0', 'translate-y-20');
-            }, 3000);
-        }
     </script>
 </body>
 </html>

@@ -4,11 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>C-Track - Authentication</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        body { font-family: 'Outfit', sans-serif; }
+        body { 
+            font-family: 'Outfit', sans-serif; 
+        }
+        
+        /* UI Panel Styling */
         .glass-card {
             background: rgba(15, 23, 42, 0.4); 
             backdrop-filter: blur(16px);       
@@ -16,23 +22,27 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
+        
         .glass-input {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
             color: white;
             transition: all 0.3s ease;
         }
+        
         .glass-input:focus {
             background: rgba(255, 255, 255, 0.1);
             border-color: rgba(99, 102, 241, 0.5); 
             outline: none;
             box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
         }
+        
         .primary-btn {
             background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
             box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
             transition: all 0.3s ease;
         }
+        
         .primary-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(79, 70, 229, 0.6);
@@ -56,7 +66,7 @@
             <form id="signInForm" class="space-y-5">
                 <div>
                     <p class="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider ml-1">Email Address</p>
-                    <input type="email" id="inEmail" required class="glass-input w-full rounded-xl px-4 py-3 placeholder-slate-500" placeholder="admin@geotrack.com">
+                    <input type="email" id="inEmail" required class="glass-input w-full rounded-xl px-4 py-3 placeholder-slate-500" placeholder="admin@domain.com">
                 </div>
                 <div>
                     <div class="flex justify-between items-center mb-2">
@@ -79,7 +89,7 @@
             <form id="signUpForm" class="space-y-5">
                 <div>
                     <p class="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider ml-1">Email Address</p>
-                    <input type="email" id="upEmail" required class="glass-input w-full rounded-xl px-4 py-3 placeholder-slate-500" placeholder="newuser@geotrack.com">
+                    <input type="email" id="upEmail" required class="glass-input w-full rounded-xl px-4 py-3 placeholder-slate-500" placeholder="newuser@domain.com">
                 </div>
                 <div>
                     <p class="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider ml-1">Password</p>
@@ -131,144 +141,167 @@
     </div>
 
     <script>
-        const sections = {
-            signIn: document.getElementById('signInSection'),
-            signUp: document.getElementById('signUpSection'),
-            forgot: document.getElementById('forgotSection'),
-            reset: document.getElementById('resetSection')
+        // --- Cache DOM Elements ---
+        const ui = {
+            sections: {
+                signIn: document.getElementById('signInSection'),
+                signUp: document.getElementById('signUpSection'),
+                forgot: document.getElementById('forgotSection'),
+                reset: document.getElementById('resetSection')
+            },
+            forms: {
+                signIn: document.getElementById('signInForm'),
+                signUp: document.getElementById('signUpForm'),
+                forgot: document.getElementById('forgotForm'),
+                reset: document.getElementById('resetForm')
+            },
+            inputs: {
+                inEmail: document.getElementById('inEmail'),
+                inPassword: document.getElementById('inPassword'),
+                upEmail: document.getElementById('upEmail'),
+                upPassword: document.getElementById('upPassword'),
+                forgotEmail: document.getElementById('forgotEmail'),
+                resetCode: document.getElementById('resetCode'),
+                newPassword: document.getElementById('newPassword')
+            },
+            messages: {
+                error: document.getElementById('errorMsg'),
+                success: document.getElementById('successMsg')
+            }
         };
-        const errorMsg = document.getElementById('errorMsg');
-        const successMsg = document.getElementById('successMsg');
+
         let currentResetEmail = '';
 
-        function clearMessages() {
-            errorMsg.classList.add('hidden');
-            successMsg.classList.add('hidden');
-        }
+        // --- Utility Functions ---
+        const clearMessages = () => {
+            ui.messages.error.classList.add('hidden');
+            ui.messages.success.classList.add('hidden');
+        };
 
-        function showSection(sectionName) {
-            Object.values(sections).forEach(sec => sec.classList.add('hidden'));
-            sections[sectionName].classList.remove('hidden');
+        const displayMessage = (type, text) => {
             clearMessages();
-        }
+            const el = type === 'error' ? ui.messages.error : ui.messages.success;
+            el.textContent = text;
+            el.classList.remove('hidden');
+        };
 
+        const showSection = (sectionName) => {
+            Object.values(ui.sections).forEach(sec => sec.classList.add('hidden'));
+            ui.sections[sectionName].classList.remove('hidden');
+            clearMessages();
+        };
+
+        // --- View Navigation Listeners ---
         document.getElementById('showSignUp').addEventListener('click', () => showSection('signUp'));
         document.getElementById('showSignInFromUp').addEventListener('click', () => showSection('signIn'));
         document.getElementById('showSignInFromForgot').addEventListener('click', () => showSection('signIn'));
         document.getElementById('showForgot').addEventListener('click', () => showSection('forgot'));
 
-        // API CALL: Sign Up
-        document.getElementById('signUpForm').addEventListener('submit', async (e) => {
+        // --- API Handlers ---
+        
+        // 1. Sign Up Handler
+        ui.forms.signUp.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('upEmail').value;
-            const password = document.getElementById('upPassword').value;
+            const payload = { 
+                email: ui.inputs.upEmail.value, 
+                password: ui.inputs.upPassword.value 
+            };
 
             try {
-                const response = await fetch('/api/signup', {
+                const res = await fetch('/api/signup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify(payload)
                 });
-                const data = await response.json();
+                const data = await res.json();
 
-                if (!response.ok) {
-                    errorMsg.textContent = data.error;
-                    errorMsg.classList.remove('hidden');
-                } else {
-                    document.getElementById('upEmail').value = '';
-                    document.getElementById('upPassword').value = '';
-                    successMsg.textContent = "Account created! Please sign in.";
-                    successMsg.classList.remove('hidden');
-                    setTimeout(() => showSection('signIn'), 1500);
-                }
+                if (!res.ok) throw new Error(data.error);
+                
+                ui.inputs.upEmail.value = '';
+                ui.inputs.upPassword.value = '';
+                displayMessage('success', "Account created! Please sign in.");
+                setTimeout(() => showSection('signIn'), 1500);
+
             } catch (err) {
-                errorMsg.textContent = "Could not connect to server.";
-                errorMsg.classList.remove('hidden');
+                displayMessage('error', err.message || "Could not connect to server.");
             }
         });
 
-        // API CALL: Sign In
-        document.getElementById('signInForm').addEventListener('submit', async (e) => {
+        // 2. Sign In Handler
+        ui.forms.signIn.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('inEmail').value;
-            const password = document.getElementById('inPassword').value;
+            const payload = { 
+                email: ui.inputs.inEmail.value, 
+                password: ui.inputs.inPassword.value 
+            };
             
             try {
-                const response = await fetch('/api/login', {
+                const res = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify(payload)
                 });
-                const data = await response.json();
+                const data = await res.json();
 
-                if (!response.ok) {
-                    errorMsg.textContent = data.error;
-                    errorMsg.classList.remove('hidden');
-                } else {
-                    localStorage.setItem('geotrack_auth', 'true');
-                    window.location.href = 'dashboard.html';
-                }
+                if (!res.ok) throw new Error(data.error);
+
+                localStorage.setItem('geotrack_auth', 'true'); // Key kept as geotrack_auth to match dashboard logic
+                window.location.href = 'dashboard.html';
+
             } catch (err) {
-                errorMsg.textContent = "Could not connect to server.";
-                errorMsg.classList.remove('hidden');
+                displayMessage('error', err.message || "Could not connect to server.");
             }
         });
 
-        // API CALL: Request Reset Code
-        document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+        // 3. Request Reset Code Handler
+        ui.forms.forgot.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('forgotEmail').value;
-            currentResetEmail = email; // Save for the next step
+            currentResetEmail = ui.inputs.forgotEmail.value;
             
             try {
-                const response = await fetch('/api/forgot-password', {
+                const res = await fetch('/api/forgot-password', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
+                    body: JSON.stringify({ email: currentResetEmail })
                 });
-                const data = await response.json();
+                const data = await res.json();
 
-                if (!response.ok) {
-                    errorMsg.textContent = data.error;
-                    errorMsg.classList.remove('hidden');
-                } else {
-                    showSection('reset');
-                    successMsg.textContent = "Code sent! Check your email.";
-                    successMsg.classList.remove('hidden');
-                }
+                if (!res.ok) throw new Error(data.error);
+
+                showSection('reset');
+                displayMessage('success', "Code sent! Check your email.");
+
             } catch (err) {
-                errorMsg.textContent = "Could not connect to server.";
-                errorMsg.classList.remove('hidden');
+                displayMessage('error', err.message || "Could not connect to server.");
             }
         });
 
-        // API CALL: Submit New Password
-        document.getElementById('resetForm').addEventListener('submit', async (e) => {
+        // 4. Submit New Password Handler
+        ui.forms.reset.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const code = document.getElementById('resetCode').value;
-            const newPassword = document.getElementById('newPassword').value;
+            const payload = { 
+                email: currentResetEmail, 
+                code: ui.inputs.resetCode.value, 
+                newPassword: ui.inputs.newPassword.value 
+            };
             
             try {
-                const response = await fetch('/api/reset-password', {
+                const res = await fetch('/api/reset-password', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: currentResetEmail, code, newPassword })
+                    body: JSON.stringify(payload)
                 });
-                const data = await response.json();
+                const data = await res.json();
 
-                if (!response.ok) {
-                    errorMsg.textContent = data.error;
-                    errorMsg.classList.remove('hidden');
-                } else {
-                    document.getElementById('resetCode').value = '';
-                    document.getElementById('newPassword').value = '';
-                    successMsg.textContent = "Password reset! You can now log in.";
-                    successMsg.classList.remove('hidden');
-                    setTimeout(() => showSection('signIn'), 2000);
-                }
+                if (!res.ok) throw new Error(data.error);
+
+                ui.inputs.resetCode.value = '';
+                ui.inputs.newPassword.value = '';
+                displayMessage('success', "Password reset! You can now log in.");
+                setTimeout(() => showSection('signIn'), 2000);
+
             } catch (err) {
-                errorMsg.textContent = "Could not connect to server.";
-                errorMsg.classList.remove('hidden');
+                displayMessage('error', err.message || "Could not connect to server.");
             }
         });
     </script>

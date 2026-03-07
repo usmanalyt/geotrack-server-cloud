@@ -55,18 +55,20 @@
             50% { opacity: 0.5; }
         }
 
+        /* Smoothly pan the marker across the map */
         .leaflet-marker-icon {
             transition: transform 0.5s linear !important;
         }
 
+        /* 🎯 NEW: Removed the static rotation so the Javascript can spin it dynamically! */
         .nav-arrow {
             color: #06b6d4;
             font-size: 28px;
             filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
-            transform: rotate(-45deg); 
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: transform 0.6s ease-out; /* Makes the spinning look smooth */
         }
 
         .fade-in {
@@ -181,16 +183,32 @@
             "🌑 Dark Mode": darkMapStyle
         }, null, { position: 'bottomright' }).addTo(map);
 
-        // ==========================================
-        // 🎯 NEW: TRACK ADMIN LOCATION FOR DISTANCE
-        // ==========================================
+        // Track Admin Location for Distance Math
         let adminLatLng = null;
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition((pos) => {
                 adminLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
             }, (err) => {
-                document.getElementById('distance').textContent = 'Location Blocked';
+                document.getElementById('distance').textContent = 'Blocked';
             }, { enableHighAccuracy: true });
+        }
+
+        // 🎯 NEW: The Mathematics to calculate exact Compass Heading (Bearing)
+        function calculateBearing(startLat, startLng, destLat, destLng) {
+            const toRad = (deg) => (deg * Math.PI) / 180;
+            const toDeg = (rad) => (rad * 180) / Math.PI;
+
+            const startLatRad = toRad(startLat);
+            const startLngRad = toRad(startLng);
+            const destLatRad = toRad(destLat);
+            const destLngRad = toRad(destLng);
+
+            const y = Math.sin(destLngRad - startLngRad) * Math.cos(destLatRad);
+            const x = Math.cos(startLatRad) * Math.sin(destLatRad) -
+                      Math.sin(startLatRad) * Math.cos(destLatRad) * Math.cos(destLngRad - startLngRad);
+
+            const brng = toDeg(Math.atan2(y, x));
+            return (brng + 360) % 360; // Returns an angle between 0 and 360 degrees
         }
 
         const SERVER_URL = 'https://geotrack-server-cloud-1.onrender.com';
@@ -217,46 +235,67 @@
             const now = new Date();
             document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
 
-            // 1. Calculate Distance to Tracker
             const currentLatLng = L.latLng(lat, lng);
+            
             if (adminLatLng) {
                 const distMeters = adminLatLng.distanceTo(currentLatLng);
                 const distText = distMeters > 1000 ? (distMeters / 1000).toFixed(2) + ' km' : Math.round(distMeters) + ' m';
                 document.getElementById('distance').textContent = distText;
-            } else {
-                document.getElementById('distance').textContent = 'Waiting...';
             }
 
-            // 2. Move Marker
+            // 🎯 NEW: Rotate the Marker based on movement!
             if (deviceMarkers[deviceId]) {
+                const oldLatLng = deviceMarkers[deviceId].getLatLng();
+                const distMoved = oldLatLng.distanceTo(currentLatLng);
+                
+                // Retrieve the last known angle, default to 0
+                let currentAngle = deviceMarkers[deviceId].options.bearing || 0;
+                
+                // Only spin the arrow if they actually moved a few meters (prevents jitter spinning while standing still)
+                if (distMoved > 2) {
+                    currentAngle = calculateBearing(oldLatLng.lat, oldLatLng.lng, lat, lng);
+                }
+
+                // Create the updated icon with the new rotation
+                // (We subtract 45 degrees because the FontAwesome icon natively points to the top-right)
+                const updatedIcon = L.divIcon({ 
+                    className: 'bg-transparent border-0', 
+                    html: `<div class="nav-arrow" style="transform: rotate(${currentAngle - 45}deg);"><i class="fa-solid fa-location-arrow"></i></div>`,
+                    iconSize: [30, 30], 
+                    iconAnchor: [15, 15] 
+                });
+
+                deviceMarkers[deviceId].setIcon(updatedIcon);
                 deviceMarkers[deviceId].setLatLng([lat, lng]);
+                deviceMarkers[deviceId].options.bearing = currentAngle; // Save for next time
+
             } else {
+                // If it's a brand new connection, just point it North initially
                 const customIcon = L.divIcon({ 
                     className: 'bg-transparent border-0', 
-                    html: '<div class="nav-arrow"><i class="fa-solid fa-location-arrow"></i></div>',
+                    html: `<div class="nav-arrow" style="transform: rotate(-45deg);"><i class="fa-solid fa-location-arrow"></i></div>`,
                     iconSize: [30, 30], 
                     iconAnchor: [15, 15] 
                 });
                 deviceMarkers[deviceId] = L.marker([lat, lng], { icon: customIcon }).addTo(map)
                     .bindPopup(`<div class="text-center p-2"><h3 class="font-bold text-slate-800 mb-1">Device: ${deviceId.substring(0,6)}</h3></div>`);
                 
-                // Initialize a fake "last geocoded" position so it triggers immediately
                 deviceMarkers[deviceId].lastGeocode = L.latLng(0, 0);
+                deviceMarkers[deviceId].options.bearing = 0;
             }
 
-            // 3. Reverse Geocoding (Convert Coordinates to Street Name)
-            // We only query the API if the phone moves more than 50 meters so they don't block us!
+            // 🎯 NEW: Smarter Reverse Geocoding
             const marker = deviceMarkers[deviceId];
             if (marker.lastGeocode.distanceTo(currentLatLng) > 50) {
                 marker.lastGeocode = currentLatLng;
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`)
                     .then(res => res.json())
                     .then(data => {
-                        // Grab the most relevant short name (road, suburb, or city)
-                        const placeName = data.name || data.address?.road || data.address?.suburb || data.address?.city || "Unknown Area";
+                        // Much broader net to catch the location name!
+                        const placeName = data.name || data.address?.road || data.address?.neighbourhood || data.address?.suburb || data.address?.village || data.address?.town || data.address?.city || data.address?.county || (data.display_name ? data.display_name.split(',')[0] : "Unnamed Area");
                         const locElement = document.getElementById('locationName');
                         locElement.textContent = placeName;
-                        locElement.title = data.display_name; // Show full address if you hover your mouse over it
+                        locElement.title = data.display_name; 
                     }).catch(err => console.log("Geocoding failed"));
             }
             

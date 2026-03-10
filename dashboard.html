@@ -244,7 +244,6 @@
             ui.lastUpdate.textContent = new Date().toLocaleTimeString();
             const currentLatLng = L.latLng(lat, lng);
             
-            // Calculate distance if admin location is known
             if (adminLatLng) {
                 const distMeters = adminLatLng.distanceTo(currentLatLng);
                 ui.distance.textContent = distMeters > 1000 
@@ -252,37 +251,35 @@
                     : Math.round(distMeters) + ' m';
             }
 
-            // 🎯 THE CUSTOM EMOJI MARKER
-            // Feel free to change this string to "🚘", "🏃‍♂️", "🛸", or "🎯"
-            const mapEmoji = "🕵️‍♂️"; 
-            
-            const emojiHtml = `
-                <div class="text-3xl filter drop-shadow-lg bg-slate-800/90 rounded-full w-12 h-12 flex items-center justify-center border-2 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.8)] pb-1 cursor-pointer hover:scale-110 transition-transform">
-                    ${mapEmoji}
+            // 🎯 THE GOOGLE MAPS STYLE PIN
+            const googlePinSvg = `
+                <div class="cursor-pointer hover:scale-110 transition-transform drop-shadow-2xl" style="transform-origin: bottom center;">
+                    <svg viewBox="0 0 24 24" width="46" height="46" xmlns="http://www.w3.org/2000/svg">
+                        <path fill="#1e3a8a" stroke="#ffffff" stroke-width="1.5" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+                        <circle cx="12" cy="9" r="3.5" fill="#ffffff" />
+                    </svg>
                 </div>
             `;
 
-            // Handle Marker Position
             if (deviceMarkers[deviceId]) {
                 const marker = deviceMarkers[deviceId];
                 
                 const updatedIcon = L.divIcon({ 
                     className: 'bg-transparent border-0 flex items-center justify-center', 
-                    html: emojiHtml,
-                    iconSize: [48, 48], 
-                    iconAnchor: [24, 24] // Centers the badge perfectly
+                    html: googlePinSvg,
+                    iconSize: [46, 46], 
+                    iconAnchor: [23, 44] // Anchors perfectly to the sharp tip at the bottom
                 });
 
                 marker.setIcon(updatedIcon);
                 marker.setLatLng([lat, lng]);
 
             } else {
-                // Initialize new marker
                 const customIcon = L.divIcon({ 
                     className: 'bg-transparent border-0 flex items-center justify-center', 
-                    html: emojiHtml,
-                    iconSize: [48, 48], 
-                    iconAnchor: [24, 24] 
+                    html: googlePinSvg,
+                    iconSize: [46, 46], 
+                    iconAnchor: [23, 44] 
                 });
                 
                 deviceMarkers[deviceId] = L.marker([lat, lng], { icon: customIcon })
@@ -292,7 +289,6 @@
                 deviceMarkers[deviceId].lastGeocode = L.latLng(0, 0);
             }
 
-            // Reverse Geocoding (throttled to 50m movements to save API calls)
             const activeMarker = deviceMarkers[deviceId];
             if (activeMarker.lastGeocode.distanceTo(currentLatLng) > 50) {
                 activeMarker.lastGeocode = currentLatLng;
@@ -314,7 +310,6 @@
             map.panTo([lat, lng]); 
         };
 
-        // Initialize history on load
         fetch(`${SERVER_URL}/api/history`)
             .then(res => res.json())
             .then(data => {
@@ -325,7 +320,6 @@
             })
             .catch(err => console.error('History fetch error:', err));
 
-        // Real-time listeners
         socket.on('update-map', (data) => updateMapPin(data.id, data.latitude, data.longitude));
 
         socket.on('device-disconnected', (deviceId) => {
@@ -342,7 +336,6 @@
             }
         });
 
-        // Admin database wipe
         ui.wipeBtn.addEventListener('click', () => {
             const pass = prompt('Enter Admin Password to wipe the database:');
             if (!pass) return;

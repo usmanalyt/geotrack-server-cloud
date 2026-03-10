@@ -70,19 +70,9 @@
             to { opacity: 1; transform: scale(1); }
         }
 
-        /* Dynamic Map Marker */
+        /* Dynamic Map Marker - Smooth Gliding */
         .leaflet-marker-icon {
             transition: transform 0.5s linear !important;
-        }
-
-        .nav-arrow {
-            color: #06b6d4;
-            font-size: 28px;
-            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.6s ease-out; 
         }
     </style>
 </head>
@@ -237,18 +227,6 @@
             }, 3000);
         };
 
-        // Calculates compass bearing between two coordinates
-        const calculateBearing = (startLat, startLng, destLat, destLng) => {
-            const toRad = deg => (deg * Math.PI) / 180;
-            const toDeg = rad => (rad * 180) / Math.PI;
-
-            const y = Math.sin(toRad(destLng) - toRad(startLng)) * Math.cos(toRad(destLat));
-            const x = Math.cos(toRad(startLat)) * Math.sin(toRad(destLat)) -
-                      Math.sin(toRad(startLat)) * Math.cos(toRad(destLat)) * Math.cos(toRad(destLng) - toRad(startLng));
-
-            return (toDeg(Math.atan2(y, x)) + 360) % 360; 
-        };
-
         // --- Socket & Core Logic ---
         socket.on('connect', () => {
             ui.connDot.classList.replace('bg-red-500', 'bg-green-500');
@@ -274,36 +252,37 @@
                     : Math.round(distMeters) + ' m';
             }
 
-            // Handle Marker Position and Rotation
+            // 🎯 THE CUSTOM EMOJI MARKER
+            // Feel free to change this string to "🚘", "🏃‍♂️", "🛸", or "🎯"
+            const mapEmoji = "🕵️‍♂️"; 
+            
+            const emojiHtml = `
+                <div class="text-3xl filter drop-shadow-lg bg-slate-800/90 rounded-full w-12 h-12 flex items-center justify-center border-2 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.8)] pb-1 cursor-pointer hover:scale-110 transition-transform">
+                    ${mapEmoji}
+                </div>
+            `;
+
+            // Handle Marker Position
             if (deviceMarkers[deviceId]) {
                 const marker = deviceMarkers[deviceId];
-                const oldLatLng = marker.getLatLng();
-                const distMoved = oldLatLng.distanceTo(currentLatLng);
-                let currentAngle = marker.options.bearing || 0;
                 
-                // Update bearing only if moved significantly to prevent jitter
-                if (distMoved > 2) {
-                    currentAngle = calculateBearing(oldLatLng.lat, oldLatLng.lng, lat, lng);
-                }
-
                 const updatedIcon = L.divIcon({ 
-                    className: 'bg-transparent border-0', 
-                    html: `<div class="nav-arrow" style="transform: rotate(${currentAngle - 45}deg);"><i class="fa-solid fa-location-arrow"></i></div>`,
-                    iconSize: [30, 30], 
-                    iconAnchor: [15, 15] 
+                    className: 'bg-transparent border-0 flex items-center justify-center', 
+                    html: emojiHtml,
+                    iconSize: [48, 48], 
+                    iconAnchor: [24, 24] // Centers the badge perfectly
                 });
 
                 marker.setIcon(updatedIcon);
                 marker.setLatLng([lat, lng]);
-                marker.options.bearing = currentAngle;
 
             } else {
-                // Initialize new marker pointing North
+                // Initialize new marker
                 const customIcon = L.divIcon({ 
-                    className: 'bg-transparent border-0', 
-                    html: `<div class="nav-arrow" style="transform: rotate(-45deg);"><i class="fa-solid fa-location-arrow"></i></div>`,
-                    iconSize: [30, 30], 
-                    iconAnchor: [15, 15] 
+                    className: 'bg-transparent border-0 flex items-center justify-center', 
+                    html: emojiHtml,
+                    iconSize: [48, 48], 
+                    iconAnchor: [24, 24] 
                 });
                 
                 deviceMarkers[deviceId] = L.marker([lat, lng], { icon: customIcon })
@@ -311,7 +290,6 @@
                     .bindPopup(`<div class="text-center p-2"><h3 class="font-bold text-slate-800 mb-1">Device: ${deviceId.substring(0,6)}</h3></div>`);
                 
                 deviceMarkers[deviceId].lastGeocode = L.latLng(0, 0);
-                deviceMarkers[deviceId].options.bearing = 0;
             }
 
             // Reverse Geocoding (throttled to 50m movements to save API calls)

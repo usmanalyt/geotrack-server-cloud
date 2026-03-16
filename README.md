@@ -2,7 +2,9 @@
 
 C-Track is a full-stack, real-time GPS tracking application. It features a responsive, glassmorphism-inspired dashboard that receives live location data from connected mobile devices, plotting them instantly on an interactive map.
 
-![C-Track Dashboard Preview](https://via.placeholder.com/800x400?text=C-Track+Live+Dashboard) ## ✨ Key Features
+![C-Track Dashboard Preview](https://via.placeholder.com/800x400?text=C-Track+Live+Dashboard)
+
+## ✨ Key Features
 
 * **Real-Time WebSockets:** Sub-second latency tracking using `Socket.io`, ensuring the map updates the exact moment the device moves.
 * **Interactive Mapping:** Powered by `Leaflet.js` with integrated Google Maps layers (Streets, Satellite) and a sleek Dark Mode.

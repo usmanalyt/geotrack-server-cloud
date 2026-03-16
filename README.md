@@ -26,11 +26,14 @@ C-Track is a full-stack, real-time GPS tracking application. It features a respo
 * MongoDB Atlas & Mongoose (Database)
 * Kalman-Filter (Data processing)
 
-## 🚀 Local Setup & Installation
 
-To run C-Track locally on your machine, follow these steps:
 
-1. **Clone the repository:**
-   ```bash
-   git clone [https://github.com/yourusername/c-track.git](https://github.com/yourusername/c-track.git)
-   cd c-track
+
+
+   📡 How it Works
+
+    The Emitter (tracker.html): Uses the HTML5 Geolocation API to request the device's high-accuracy coordinates. It beams this data to the server via WebSockets.
+
+    The Server (server.js): Receives the raw coordinates, passes them through a Kalman filter for mathematical smoothing, saves the snapshot to MongoDB, and broadcasts the clean coordinates to all connected dashboards.
+
+    The Dashboard (dashboard.html): Receives the broadcast, updates the custom Google Maps SVG pin, pans the camera, and triggers a reverse-geocode fetch to display the current street name.

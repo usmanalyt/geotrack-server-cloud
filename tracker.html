@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>C-Track - Emitter</title>
+    <title>C-Track - Device Emitter</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 </head>
@@ -14,7 +14,7 @@
             <span class="text-3xl">📡</span>
         </div>
         <h1 class="text-2xl font-bold mb-2">Device Emitter</h1>
-        <p class="text-slate-400 mb-8 text-sm">Keep this screen open on your phone to transmit your live location to the dashboard.</p>
+        <p class="text-slate-400 mb-8 text-sm">Keep this screen open on your phone to transmit your live location.</p>
         
         <button id="startBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-full w-full shadow-lg shadow-green-500/30 transition-all text-lg">
             Start Tracking
@@ -24,66 +24,57 @@
     </div>
 
     <script>
-       // Connect to your live Render server!
+        const ui = {
+            btn: document.getElementById('startBtn'),
+            statusText: document.getElementById('status')
+        };
+        
         const socket = io(); 
-        const statusText = document.getElementById('status');
         let watchId = null;
 
-        document.getElementById('startBtn').addEventListener('click', () => {
-            const btn = document.getElementById('startBtn');
+        const stopTracking = () => {
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            watchId = null;
+            socket.disconnect(); 
+            
+            ui.btn.textContent = "Start Tracking";
+            ui.btn.classList.replace('bg-red-500', 'bg-green-500');
+            ui.btn.classList.replace('hover:bg-red-600', 'hover:bg-green-600');
+            ui.btn.classList.replace('shadow-red-500/30', 'shadow-green-500/30');
+            ui.statusText.textContent = "Tracking stopped.";
+        };
 
-            if (watchId) {
-                // =========================================
-                // 🛑 STOP TRACKING LOGIC
-                // =========================================
-                navigator.geolocation.clearWatch(watchId);
-                watchId = null;
-                
-                // 🎯 THE FIX: Explicitly sever the connection so the dashboard knows!
-                socket.disconnect(); 
-                
-                btn.textContent = "Start Tracking";
-                btn.classList.replace('bg-red-500', 'bg-green-500');
-                btn.classList.replace('hover:bg-red-600', 'hover:bg-green-600');
-                btn.classList.replace('shadow-red-500/30', 'shadow-green-500/30');
-                statusText.textContent = "Tracking stopped.";
-            } else {
-                // =========================================
-                // 🟢 START TRACKING LOGIC
-                // =========================================
-                // 🎯 THE FIX: Reconnect the socket before we start sending data again
-                socket.connect(); 
+        const startTracking = () => {
+            socket.connect(); 
 
-                if ("geolocation" in navigator) {
-                    btn.textContent = "Stop Tracking";
-                    btn.classList.replace('bg-green-500', 'bg-red-500');
-                    btn.classList.replace('hover:bg-green-600', 'hover:bg-red-600');
-                    btn.classList.replace('shadow-green-500/30', 'shadow-red-500/30');
-                    statusText.textContent = "Locating satellites...";
-
-                    // Read the phone's GPS
-                    watchId = navigator.geolocation.watchPosition(
-                        (position) => {
-                            const lat = position.coords.latitude;
-                            const lng = position.coords.longitude;
-                            
-                            statusText.textContent = `Live: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-                            
-                            // Beam it to the server!
-                            socket.emit('send-location', {
-                                latitude: lat,
-                                longitude: lng
-                            });
-                        },
-                        (error) => {
-                            statusText.textContent = "Error: Please enable GPS permissions.";
-                        },
-                        { enableHighAccuracy: true, maximumAge: 0 } 
-                    );
-                } else {
-                    statusText.textContent = "GPS not supported on this device.";
-                }
+            if (!("geolocation" in navigator)) {
+                ui.statusText.textContent = "GPS not supported on this device.";
+                return;
             }
+
+            ui.btn.textContent = "Stop Tracking";
+            ui.btn.classList.replace('bg-green-500', 'bg-red-500');
+            ui.btn.classList.replace('hover:bg-green-600', 'hover:bg-red-600');
+            ui.btn.classList.replace('shadow-green-500/30', 'shadow-red-500/30');
+            ui.statusText.textContent = "Locating satellites...";
+
+            watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    ui.statusText.textContent = `Live: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+                    
+                    socket.emit('send-location', { latitude, longitude });
+                },
+                (error) => {
+                    ui.statusText.textContent = "Error: Please enable GPS permissions.";
+                    stopTracking();
+                },
+                { enableHighAccuracy: true, maximumAge: 0 } 
+            );
+        };
+
+        ui.btn.addEventListener('click', () => {
+            watchId ? stopTracking() : startTracking();
         });
     </script>
 </body>

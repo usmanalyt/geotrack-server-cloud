@@ -1,22 +1,36 @@
-# 🌍 GeoTrack - Real-Time IoT Geolocation App
+# C-Track 📍 | Real-Time GPS Tracking Platform
 
-GeoTrack is a full-stack, real-time location tracking architecture. It bridges mobile GPS hardware with a cloud-hosted backend, allowing for live device monitoring, historical route mapping, and perimeter security via a web dashboard.
+C-Track is a full-stack, real-time GPS tracking application. It features a responsive, glassmorphism-inspired dashboard that receives live location data from connected mobile devices, plotting them instantly on an interactive map.
 
-## 🚀 Core Features
-* **Real-Time WebSockets:** GPS coordinates are beamed from the mobile client to the server and instantly pushed to the web dashboard using `Socket.io` without page refreshes.
-* **Multi-Device Fleet Tracking:** Dynamically assigns unique session IDs, color-coded map pins, and separate route histories for multiple active devices.
-* **Geofencing Security:** Automatically generates a 50-meter Safe Zone perimeter around a device's starting location and triggers a red UI alert if the boundary is breached.
-* **Historical Data Storage:** Persistently saves all coordinates with timestamps to a MongoDB database, allowing the map to redraw past routes.
-* **Admin Controls:** Includes a secure command to wipe the database and reset the map.
+![C-Track Dashboard Preview](https://via.placeholder.com/800x400?text=C-Track+Live+Dashboard) ## ✨ Key Features
+
+* **Real-Time WebSockets:** Sub-second latency tracking using `Socket.io`, ensuring the map updates the exact moment the device moves.
+* **Interactive Mapping:** Powered by `Leaflet.js` with integrated Google Maps layers (Streets, Satellite) and a sleek Dark Mode.
+* **Live Distance & Telemetry:** Calculates the real-time distance between the admin dashboard and the tracking device, alongside speed and accuracy metrics.
+* **Reverse Geocoding:** Automatically translates raw GPS coordinates into human-readable street and neighborhood names using the OpenStreetMap API.
+* **GPS Smoothing:** Implements a backend **Kalman Filter** to smooth out GPS jitter and prevent erratic pin jumping.
+* **Secure Authentication:** Full login/signup system with encrypted sessions and database-driven password resets.
+* **Responsive Glassmorphism UI:** Built completely with Tailwind CSS, ensuring the dashboard looks like a native app on both mobile phones and desktop monitors.
 
 ## 🛠️ Tech Stack
-* **Mobile Client:** React Native, Expo, Expo-Location
-* **Backend Server:** Node.js, Express, Socket.io (Hosted on Render)
-* **Database:** MongoDB Atlas (Mongoose)
-* **Web Dashboard:** HTML/CSS/JS, Leaflet.js Maps, OpenStreetMap API
 
-## 💡 How It Works
-1. The React Native mobile app accesses the physical device's GPS chip.
-2. Coordinates are transmitted via HTTP POST to the Render cloud server.
-3. The server saves the payload to MongoDB and emits a WebSocket broadcast.
-4. The web dashboard catches the broadcast and instantly updates the Leaflet map UI.
+**Frontend:**
+* HTML5 / CSS3 / JavaScript
+* Tailwind CSS (Styling & Responsive Design)
+* Leaflet.js (Map Rendering)
+* Socket.io-client (Real-time connection)
+
+**Backend:**
+* Node.js & Express.js
+* Socket.io (WebSocket Server)
+* MongoDB Atlas & Mongoose (Database)
+* Kalman-Filter (Data processing)
+
+## 🚀 Local Setup & Installation
+
+To run C-Track locally on your machine, follow these steps:
+
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/yourusername/c-track.git](https://github.com/yourusername/c-track.git)
+   cd c-track

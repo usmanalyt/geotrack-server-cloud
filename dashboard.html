@@ -192,8 +192,8 @@
 
         L.control.zoom({ position: 'bottomright' }).addTo(map);
         L.control.layers({
-            "🗺️ Google Streets": mapLayers.streets,
-            "🌍 Google Satellite": mapLayers.satellite,
+            "🗺️ Streets Mode": mapLayers.streets,
+            "🌍  Satellite Mode": mapLayers.satellite,
             "🌑 Dark Mode": mapLayers.dark
         }, null, { position: 'bottomright' }).addTo(map);
 
@@ -212,7 +212,7 @@
             );
         }
 
-        // --- Utility Functions ---
+        //  Utility Functions 
         const showToast = (message, type = 'success') => {
             ui.toastMsg.textContent = message;
             const icon = ui.toast.querySelector('i');
@@ -227,7 +227,7 @@
             }, 3000);
         };
 
-        // --- Socket & Core Logic ---
+        //  Socket & Core Logic 
         socket.on('connect', () => {
             ui.connDot.classList.replace('bg-red-500', 'bg-green-500');
             ui.connText.textContent = 'Connected';
@@ -251,7 +251,7 @@
                     : Math.round(distMeters) + ' m';
             }
 
-            // 🎯 THE GOOGLE MAPS STYLE PIN
+            // 🎯 PIN STYLE 
             const googlePinSvg = `
                 <div class="cursor-pointer hover:scale-110 transition-transform drop-shadow-2xl" style="transform-origin: bottom center;">
                     <svg viewBox="0 0 24 24" width="46" height="46" xmlns="http://www.w3.org/2000/svg">

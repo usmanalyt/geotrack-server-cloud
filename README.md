@@ -2,7 +2,10 @@
 
 C-Track is a full-stack, real-time GPS tracking application. It features a responsive, glassmorphism-inspired dashboard that receives live location data from connected mobile devices, plotting them instantly on an interactive map.
 
-<img width="1366" height="768" alt="darshboard2" src="https://github.com/user-attachments/assets/15f5cbac-110e-4fc5-bd6f-38012b48bc2c" />
+<img width="1365" height="687" alt="dashboard" src="https://github.com/user-attachments/assets/756c68c9-fbf1-47b5-890a-48936e6882d0" />
+
+<img width="1365" height="691" alt="map" src="https://github.com/user-attachments/assets/e622dbd1-92b1-4e09-a831-d76062f0ec31" />
+
 
 
 
